@@ -67,7 +67,9 @@ class StageManager:
             'lobby': self.start_game,
             'play_store': self.click_brawl_stars,
             "brawl_stars_crashed": self.start_brawl_stars,
-            'star_drop': self.click_star_drop
+            'star_drop': self.click_star_drop,
+            'demonic_star_drop': self.hold_star_drop,
+            'demonic_star_drop_color': self.hold_star_drop
         }
         self.Lobby_automation = LobbyAutomation(screenshot_taker.camera, frame_queue)
         self.lobby_config = load_toml_as_dict("./cfg/lobby_config.toml")
@@ -175,6 +177,11 @@ class StageManager:
 
     def click_star_drop(self):
         pyautogui.press("q")
+
+    def hold_star_drop(self):
+        pyautogui.keyDown("q")
+        time.sleep(10) # i dont know how long the animation lasts
+        pyautogui.keyUp("q")
 
     def end_game(self):
         screenshot = self.Screenshot.take()

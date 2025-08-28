@@ -102,6 +102,12 @@ def get_in_game_state(image):
 
     if is_in_star_drop(image):
         return "star_drop"
+    
+    if is_in_demonic_star_drop(image):
+        return "demonic_star_drop"
+    
+    if is_in_demonic_star_drop_color(image):
+        return "demonic_star_drop_color"
 
     return "match"
 
@@ -137,6 +143,13 @@ def is_in_star_road(image):
 
 def is_in_star_drop(image):
     return is_template_in_region(image, path + "star_drop.png", region_data['star_drop'])
+
+
+def is_in_demonic_star_drop(image): 
+    return is_template_in_region(image, path + "demonic_star_drop.png", region_data['demonic_star_drop']) #needs to be tested
+
+def is_in_demonic_star_drop_color(image):
+    return is_template_in_region(image, path + "demonic_star_drop_color.png", region_data['demonic_star_drop_color']) #MIGHT BREAK BC ITS JUST DETECTING COLOR, DISABLE AFTER EVENT
 
 
 def get_state(screenshot):

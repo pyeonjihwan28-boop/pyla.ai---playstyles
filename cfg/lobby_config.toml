@@ -17,4 +17,5 @@ thumbs_down = [1600, 80, 110, 110]
 brawl_pass_house = [1690, 35, 140, 100]
 go_back_arrow = [37, 22, 187, 126]
 star_drop = [764, 336, 360, 360]
-
+demonic_star_drop = [801,343,304,324]
+demonic_star_drop_color = [1207,374,82,206] # the star drops keeps bouncing, there is def a better way to do this
