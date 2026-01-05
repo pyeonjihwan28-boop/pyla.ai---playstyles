@@ -12,7 +12,6 @@ class TrophyObserver:
     def __init__(self, brawler_list):
         self.history_file = "./cfg/match_history.toml"
         self.current_trophies = None
-        self.current_mastery = None
         self.match_history = self.load_history(brawler_list)
         self.match_history['total'] = {"defeat": 0, "victory": 0, "draw": 0}
         self.sent_match_history = {brawler: {"defeat": self.match_history[brawler]["defeat"],
@@ -24,15 +23,9 @@ class TrophyObserver:
         self.trophy_lose_ranges = [(49, 0), (99, 1), (199, 2), (599, 3), (699, 4), (799, 5), (899, 6), (999, 7),
                                    (1099, 8), (1199, 11), (1299, 13), (1399, 16), (1499, 19), (1599, 22), (1699, 25), (1799, 28), (1899, 31), (1999, 34), (float("inf"), 50)]
         self.trophy_win_ranges = [(1099, 8), (1199, 7), (1299, 6), (1399, 5), (1499, 4), (1599, 3), (1699, 2), (float("inf"), 1)]
-        self.mastery_win_gains = [(0, 49, 5), (50, 99, 7), (100, 149, 10), (150, 199, 12), (200, 249, 15),
-                                  (250, 299, 17), (300, 349, 20), (350, 399, 23), (400, 449, 25), (450, 499, 27),
-                                  (500, 549, 35), (550, 599, 40), (600, 649, 45), (650, 699, 50), (700, 749, 55),
-                                  (750, 799, 60), (800, 849, 65), (850, 899, 70), (900, 949, 75), (950, 999, 80),
-                                  (1000, 1049, 85), (1050, 1099, 90), (1100, 1149, 95), (1150, float('inf'), 100)]
 
         self.crop_region = load_toml_as_dict("./cfg/lobby_config.toml")['lobby']['trophy_observer']
         self.reader = easyocr.Reader(['en'])
-        self.mastery_madness_percentage = int(load_toml_as_dict("./cfg/general_config.toml")["mastery_madness"])
         self.trophies_multiplier = int(load_toml_as_dict("./cfg/general_config.toml")["trophies_multiplier"])
 
     @staticmethod
@@ -104,7 +97,6 @@ class TrophyObserver:
             print("Catastrophic failure")
 
         print(f"Trophies : {old} -> {self.current_trophies}")
-        print("Current mastery points:", self.current_mastery)
         self.match_history[current_brawler][game_result] += 1
         self.match_history["total"][game_result] += 1
 
@@ -115,12 +107,6 @@ class TrophyObserver:
         self.save_history()
         return True
 
-    def add_mastery(self, game_result):
-        if game_result == "victory":
-            for min_value, max_value, gain in self.mastery_win_gains:
-                if float(min_value) <= float(self.current_trophies) <= float(max_value):
-                    self.current_mastery += gain * (1 + self.mastery_madness_percentage / 100)
-                    return
 
     def find_game_result(self, screenshot, current_brawler, game_result=None):
         if not game_result:
@@ -138,7 +124,6 @@ class TrophyObserver:
                 return False
 
         self.add_trophies(game_result, current_brawler)
-        self.add_mastery(game_result)
         return True
 
     def change_trophies(self, new):

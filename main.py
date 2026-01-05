@@ -80,8 +80,6 @@ def pyla_main(data):
         def initialize_stage_manager(self):
             self.Stage_manager.Trophy_observer.win_streak = 0
             self.Stage_manager.Trophy_observer.current_trophies = data[0]['trophies']
-            self.Stage_manager.Trophy_observer.current_mastery = data[0]['mastery'] if data[0][
-                                                                                           'mastery'] != "" else -99999
 
         @staticmethod
         def load_models():

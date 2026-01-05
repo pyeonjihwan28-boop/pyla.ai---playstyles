@@ -73,7 +73,6 @@ class StageManager:
         self.lobby_config = load_toml_as_dict("./cfg/lobby_config.toml")
         self.brawl_stars_icon = load_image("state_finder/images_to_detect/brawl_stars_icon.png")
         self.brawl_stars_icon_big = load_image("state_finder/images_to_detect/brawl_stars_icon_big.png")
-        self.mastery_points_icon = load_image("./state_finder/images_to_detect/mastery_points.PNG")
         self.close_popup_icon = load_image("state_finder/images_to_detect/close_popup.png")
         self.brawlers_pick_data = brawlers_data
         brawler_list = [brawler["brawler"] for brawler in brawlers_data]
@@ -107,24 +106,12 @@ class StageManager:
         return trophy_value
 
     def start_game(self, data):
-        values = {
-            "trophies": self.Trophy_observer.current_trophies,
-            "mastery": self.Trophy_observer.current_mastery
-        }
-
-        type_of_push = self.brawlers_pick_data[0]['type']
-        value = values[type_of_push]
-        if value == "" and type_of_push == "mastery":
-            value = -99999
+        value = self.Trophy_observer.current_trophies
         push_current_brawler_till = self.brawlers_pick_data[0]['push_until']
-        if push_current_brawler_till == "" and type_of_push == "mastery":
-            push_current_brawler_till = 99999
-
         if value >= push_current_brawler_till:
             if len(self.brawlers_pick_data) <= 1:
-                print("Brawler reached required trophies/mastery. No more brawlers selected for pushing in the menu. "
-                      "Bot will"
-                      "now pause itself until closed.", value, push_current_brawler_till)
+                print("Brawler reached required trophies. No more brawlers selected for pushing in the menu. "
+                      "Bot will now pause itself until closed.", value, push_current_brawler_till) #do we want a newline here?
                 time.sleep(10 ** 5)
                 loop = asyncio.new_event_loop()
                 screenshot = self.Screenshot.take()
@@ -137,7 +124,6 @@ class StageManager:
             loop.close()
             self.brawlers_pick_data.pop(0)
             self.Trophy_observer.change_trophies(self.brawlers_pick_data[0]['trophies'])
-            self.Trophy_observer.current_mastery = self.brawlers_pick_data[0]['mastery'] if self.brawlers_pick_data[0]['mastery'] != "" else -99999
             self.Trophy_observer.win_streak = self.brawlers_pick_data[0]['win_streak']
             next_brawler_name = self.brawlers_pick_data[0]['brawler']
             if self.brawlers_pick_data[0]["automatically_pick"]:
@@ -163,10 +149,7 @@ class StageManager:
         if debug: print("Pressed Q to start a match")
 
     def extract_mastery_points(self, screenshot):
-        screenshot = screenshot.crop((147, 358, 1524, 462))
-        detection = find_template_center(screenshot, self.mastery_points_icon)
-        if detection:
-            return True
+        pass
 
     def click_brawl_stars(self, frame):
         screenshot = frame.crop((50, 4, 900, 31))
@@ -194,28 +177,15 @@ class StageManager:
                 # will return True if updates trophies, trophies are updated inside Trophy observer
                 found_game_result = self.Trophy_observer.find_game_result(screenshot, current_brawler=self.brawlers_pick_data[0]['brawler'])
                 self.time_since_last_stat_change = time.time()
-                values = {
-                    "trophies": self.Trophy_observer.current_trophies,
-                    "mastery": self.Trophy_observer.current_mastery
-                }
-                type_to_push = self.brawlers_pick_data[0]['type']
-                value = values[type_to_push]
-                self.brawlers_pick_data[0][type_to_push] = value
+                value = self.Trophy_observer.current_trophies
+                self.brawlers_pick_data[0]['trophies'] = value
                 save_brawler_data(self.brawlers_pick_data)
                 push_current_brawler_till = self.brawlers_pick_data[0]['push_until']
-
-                # things so to have mastery be farmed infinitely if no initial or target mastery value are set
-                if value == "" and type_to_push == "mastery":
-                    value = -99999
-                if push_current_brawler_till == "" and type_to_push == "mastery":
-                    push_current_brawler_till = 99999
-
                 if value >= push_current_brawler_till:
                     if len(self.brawlers_pick_data) <= 1:
                         print(
-                            "Brawler reached required trophies/mastery. No more brawlers selected for pushing in the menu. "
-                            "Bot will"
-                            "now pause itself until closed.")
+                            "Brawler reached required trophies. No more brawlers selected for pushing in the menu. "
+                            "Bot will now pause itself until closed.")
                         loop = asyncio.new_event_loop()
                         screenshot = self.Screenshot.take()
                         loop.run_until_complete(async_notify_user("completed", screenshot))

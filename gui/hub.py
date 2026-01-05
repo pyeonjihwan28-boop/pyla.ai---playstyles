@@ -75,7 +75,6 @@ class Hub:
         self.general_config.setdefault("super_debug", "yes")
         self.general_config.setdefault("cpu_or_gpu", "auto")
         self.general_config.setdefault("monitor", "0")
-        self.general_config.setdefault("mastery_madness", "0")
         self.general_config.setdefault("long_press_star_drop", "no")
         self.general_config.setdefault("trophies_multiplier", 1.0)
 
@@ -587,13 +586,6 @@ class Hub:
             tooltip_text="For how long (in seconds) will the bot try to go in a different position to unstuck itself before going back to normal."
         )
 
-        create_labeled_entry(
-            label_text="Mastery Madness % amount:",
-            config_key="mastery_madness",
-            convert_func=int,
-            use_general_config=True,
-            tooltip_text="Enter the number but not the % of the current mastery madness. (for example : 300 for 300%)"
-        )
 
         create_labeled_entry(
             label_text="Trophies Multiplier:",

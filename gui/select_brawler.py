@@ -154,11 +154,6 @@ class SelectBrawler:
             border_color=self.colors['cherry red'], border_width=int(2 * scale_factor), height=int(28 * scale_factor)
         )
 
-        mastery_var = tk.StringVar()
-        mastery_entry = ctk.CTkEntry(
-            top, textvariable=mastery_var, fg_color=self.colors['ui box gray'], text_color="white",
-            border_color=self.colors['cherry red'], border_width=int(2 * scale_factor), height=int(28 * scale_factor)
-        )
 
         current_win_streak_var = tk.StringVar(value="0")  # Set the default value to "0"
         current_win_streak_entry = ctk.CTkEntry(
@@ -176,26 +171,17 @@ class SelectBrawler:
             push_until_value = push_until_var.get()
             push_until_value = int(push_until_value) if push_until_value.isdigit() else ""
             trophies_value = int(trophies_var.get())
-            mastery_value = mastery_var.get()
-            mastery_value = int(mastery_value) if mastery_value.isdigit() else ""
             current_win_streak_value = current_win_streak_var.get()
-            if self.farm_type == "trophies" and mastery_value == "":
-                mastery_value = 0
             data = {
                 "brawler": brawler,
                 "push_until": push_until_value,
                 "trophies": trophies_value,
-                "mastery": mastery_value,
-                "type": self.farm_type,
+                "type": "trophies",
                 "automatically_pick": auto_pick_var.get(),
                 "win_streak": int(current_win_streak_value)
             }
 
-            if data["type"] == "":
-                if data["trophies"] <= data["mastery"]:
-                    data["type"] = "trophies"
-                else:
-                    data["type"] = "mastery"
+            # type is always trophies now
 
             self.brawlers_data = [item for item in self.brawlers_data if item["brawler"] != data["brawler"]]
             self.brawlers_data.append(data)
@@ -212,38 +198,17 @@ class SelectBrawler:
         farm_type_button_frame = ctk.CTkFrame(top, width=int(200 * scale_factor), height=int(50 * scale_factor),
                                               fg_color=self.colors['ui box gray'])
 
-        self.mastery_button = ctk.CTkButton(farm_type_button_frame, text="Mastery", width=int(85 * scale_factor),
-                                            command=lambda: self.set_farm_type_color("mastery"),
-                                            hover_color=self.colors['cherry red'],
-                                            font=("", int(15 * scale_factor)),
-                                            fg_color=self.colors["ui box gray"],
-                                            border_color=self.colors['cherry red'],
-                                            border_width=int(2 * scale_factor)
-                                            )
-        self.trophies_button = ctk.CTkButton(farm_type_button_frame, text="Trophies", width=int(85 * scale_factor),
-                                             command=lambda: self.set_farm_type_color("trophies"),
-                                             hover_color=self.colors['cherry red'],
-                                             font=("", int(15 * scale_factor)),
-                                             fg_color=self.colors["ui box gray"],
-                                             border_color=self.colors['cherry red'], border_width=int(2 * scale_factor)
-                                             )
 
-        self.trophies_button.place(x=int(10 * scale_factor))
-        self.mastery_button.place(x=int(110 * scale_factor))
 
         ctk.CTkLabel(top, text=f"Brawler: {brawler}", font=("Comic sans MS", int(20 * scale_factor)),
                      text_color=self.colors['red']).pack(
             pady=int(7 * scale_factor))
-        farm_type_button_frame.pack()
         ctk.CTkLabel(top, text="Push Until", font=("Comic sans MS", int(15 * scale_factor)),
                      text_color=self.colors['chess white']).pack()
         push_until_entry.pack(pady=int(4 * scale_factor))
         ctk.CTkLabel(top, text="Trophies", font=("Comic sans MS", int(15 * scale_factor)),
                      text_color=self.colors['chess white']).pack()
         trophies_entry.pack(pady=int(4 * scale_factor))
-        ctk.CTkLabel(top, text="Mastery", font=("Comic sans MS", int(15 * scale_factor)),
-                     text_color=self.colors['chess white']).pack()
-        mastery_entry.pack(pady=int(4 * scale_factor))
         ctk.CTkLabel(top, text="Brawler's Win Streak", font=("Comic sans MS", int(15 * scale_factor)),
                      text_color=self.colors['chess white']).pack()
         current_win_streak_entry.pack(pady=int(4 * scale_factor))
