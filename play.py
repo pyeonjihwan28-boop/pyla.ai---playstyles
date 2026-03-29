@@ -515,7 +515,8 @@ class Play(Movement):
                     self.time_since_last_proceeding = current_time
                 else:
                     print("haven't detected the player in a while proceeding")
-                    self.window_controller.press_key("Q")
+                    w, t = self.window_controller, time.sleep
+                    [t(0.5) for x, y in [[960, 540], [960, 950], [1660, 980]] if not w.click(x, y, 0.02, False)]
                     self.time_since_last_proceeding = time.time()
             return
         self.time_since_last_proceeding = time.time()

@@ -182,7 +182,7 @@ class StageManager:
         if self.long_press_star_drop == "yes":
             self.window_controller.press_key("Q",10)
         else:
-            self.window_controller.press_key("Q")
+            [time.sleep(0.5) for x, y in [[960, 540], [960, 950], [1660, 980]] if not self.window_controller.click(x, y, 0.02, False)]
 
     def end_game(self):
         screenshot = self.window_controller.screenshot()
@@ -233,7 +233,7 @@ class StageManager:
                         self.window_controller.keys_up(list("wasd"))
                         self.window_controller.close()
                         sys.exit(0)
-            self.window_controller.press_key("Q")
+            [time.sleep(0.5) for x, y in [[960, 540], [960, 950], [1660, 980]] if not self.window_controller.click(x, y, 0.02, False)]
             if debug: print("Game has ended, pressing Q")
             time.sleep(3)
             screenshot = self.window_controller.screenshot()
