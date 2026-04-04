@@ -76,13 +76,8 @@ To make sure changes do not introduce regressions:
 
 ## 🤝 Contribution
 
-Contributions are welcome.
-
-If you want to help improve PylaAI:
-
-1. Fork the repository
-2. Create a new branch
-3. Submit a Pull Request
+We aren't currently accepting contributions as this repo is behind on the early-access version.
+Though feel free to make your own fork.
 
 You can also open an **Issue** for bugs or feature requests.
 
