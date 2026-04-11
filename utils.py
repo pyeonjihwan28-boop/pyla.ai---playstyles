@@ -1,6 +1,7 @@
+import os
+import sys
 import hashlib
 import io
-import os
 from io import BytesIO
 import ctypes
 import json
@@ -14,9 +15,43 @@ import discord
 import cv2
 import numpy as np
 from packaging import version
-import bettercam
 import time
 import easyocr
+from contextlib import contextmanager # Added for silencer
+
+# make the console stop all the warnings that are not important
+@contextmanager
+def suppress_stdout_stderr():
+    """Forcefully mutes the console for the duration of the 'with' block."""
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = devnull
+        sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+# Function to safely get path for JSON/TOML files
+def get_json_path(relative_path):
+    if getattr(sys, 'frozen', False):
+        exe_path = os.path.join(os.path.dirname(sys.executable), relative_path)
+        if os.path.exists(exe_path):
+            return exe_path
+    return resource_path(relative_path)
+# ---------------------------------------------------------
 
 def extract_text_and_positions(image_path):
     results = reader.readtext(image_path)
@@ -40,22 +75,26 @@ def extract_text_and_positions(image_path):
 
 class DefaultEasyOCR:
     def __init__(self):
-        self.reader = easyocr.Reader(['en'])
+        # OCR initialized with GPU disabled for compatibility across providers
+        self.reader = easyocr.Reader(['en'], gpu=False)
 
     def readtext(self, image_input):
         return self.reader.readtext(image_input)
 
 def load_toml_as_dict(file_path):
-    if os.path.exists(file_path):
-        with open(file_path, 'r') as f:
-            return toml.load(f)
-    else:
-        return {}
-
+    path = get_json_path(file_path)
+    if os.path.exists(path):
+        try:
+            with open(path, 'r') as f:
+                return toml.load(f)
+        except:
+            return {}
+    return {}
 
 reader = DefaultEasyOCR()
 api_base_url = "localhost"
-brawlers_info_file_path = "cfg/brawlers_info.json"
+
+brawlers_info_file_path = get_json_path("cfg/brawlers_info.json")
 
 def count_hsv_pixels(pil_image, low_hsv, high_hsv):
     opencv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
@@ -65,13 +104,10 @@ def count_hsv_pixels(pil_image, low_hsv, high_hsv):
     return pixel_count
 
 def save_brawler_data(data):
-    """
-    Save the given data to a json file. As a list of dictionaries.
-    """
-    with open("latest_brawler_data.json", 'w') as f:
+    save_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else "."
+    save_path = os.path.join(save_dir, "latest_brawler_data.json")
+    with open(save_path, 'w') as f:
         json.dump(data, f, indent=4)
-
-
 
 def find_template_center(main_img, template, threshold=0.8):
     main_image_cv = cv2.cvtColor(np.array(main_img), cv2.COLOR_RGB2GRAY)
@@ -82,56 +118,44 @@ def find_template_center(main_img, template, threshold=0.8):
         template_cv = template_arr
     w, h = template_cv.shape[::-1]
 
-    # Perform template matching
     result = cv2.matchTemplate(main_image_cv, template_cv, cv2.TM_CCOEFF_NORMED)
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+    _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
-    # Check if the match is found based on a threshold value
     if max_val >= threshold:
         center_x = max_loc[0] + w // 2
         center_y = max_loc[1] + h // 2
-
         return center_x, center_y
     else:
         return False
 
-
-
-
-
 def save_dict_as_toml(data, file_path):
-    with open(file_path, 'w') as f:
+    with open(get_json_path(file_path), 'w') as f:
         toml.dump(data, f)
 
-
 def update_toml_file(path, new_data):
-    with open(path, 'w') as file:
+    with open(get_json_path(path), 'w') as file:
         toml.dump(new_data, file)
 
 def load_brawlers_info():
-    if os.path.exists(brawlers_info_file_path):
-        with open(brawlers_info_file_path, 'r') as f:
+    path = get_json_path("cfg/brawlers_info.json")
+    if os.path.exists(path):
+        with open(path, 'r') as f:
             return json.load(f)
-    else:
-        return {}
+    return {}
 
 def update_brawlers_info(brawlers_info):
-    with open(brawlers_info_file_path, 'w') as f:
+    path = get_json_path("cfg/brawlers_info.json")
+    with open(path, 'w') as f:
         json.dump(brawlers_info, f, indent=4)
-
 
 def get_brawler_list():
     if api_base_url == "localhost":
-        brawler_list = list(load_brawlers_info().keys())
-        return brawler_list
+        return list(load_brawlers_info().keys())
     url = f'https://{api_base_url}/get_brawler_list'
     response = requests.post(url)
     if response.status_code == 201:
-        data = response.json()
-        return data.get('brawlers', [])
-    else:
-        return []
-
+        return response.json().get('brawlers', [])
+    return []
 
 def update_missing_brawlers_info(brawlers):
     brawlers_info = load_brawlers_info()
@@ -141,230 +165,129 @@ def update_missing_brawlers_info(brawlers):
             if brawler_info:
                 brawlers_info[brawler] = brawler_info
                 update_brawlers_info(brawlers_info)
-                print(f"Added info for brawler '{brawler}': {brawler_info}")
-                # Download the brawler icon
-                save_brawler_icon(brawler)
-            else:
-                print(f"Could not find info for brawler '{brawler}'")
-        if not os.path.exists(f"./api/assets/brawler_icons/{brawler}.png"):
+        
+        icon_path = get_json_path(f"api/assets/brawler_icons/{brawler}.png")
+        if not os.path.exists(icon_path):
             save_brawler_icon(brawler)
 
-
 def get_brawler_info(brawler_name):
-    url = f'https://{api_base_url}/get_brawler_info'  # Adjust the URL if necessary
+    url = f'https://{api_base_url}/get_brawler_info'
     response = requests.post(url, json={'brawler_name': brawler_name})
     if response.status_code == 200:
-        data = response.json()
-        return data.get('info', [])
-    else:
-        print(f"Error fetching range for '{brawler_name}': {response.status_code} - {response.text}")
-        return None
-
+        return response.json().get('info', [])
+    return None
 
 def save_brawler_icon(brawler_name):
-    # Clean the brawler name for filename
-    brawler_name_clean = brawler_name.lower().replace(' ', '').replace('-', '').replace('.', '').replace('&',
-                                                                                                         '')
+    brawler_name_clean = brawler_name.lower().replace(' ', '').replace('-', '').replace('.', '').replace('&', '')
     brawlers_url = "https://api.brawlapi.com/v1/brawlers"
     response = requests.get(brawlers_url)
-    if response.status_code != 200:
-        print(f"Failed to fetch brawlers from API: {response.status_code}")
-        return
+    if response.status_code != 200: return
+    
     brawlers_data = response.json()['list']
-
-    # Find the brawler in the API data
     for brawler_obj in brawlers_data:
-        api_brawler_name = brawler_obj['name'].lower().replace(' ', '').replace('-', '').replace('.',
-                                                                                                 '').replace(
-            '&', '')
-        if api_brawler_name == brawler_name_clean:
+        api_name = brawler_obj['name'].lower().replace(' ', '').replace('-', '').replace('.', '').replace('&', '')
+        if api_name == brawler_name_clean:
             icon_url = brawler_obj['imageUrl2']
             img_response = requests.get(icon_url)
             if img_response.status_code == 200:
                 image = Image.open(BytesIO(img_response.content))
-                image.save(f"api/assets/brawler_icons/{brawler_name_clean}.png")
-                print(f"Saved icon for brawler '{brawler_name}'")
-            else:
-                print(f"Failed to download icon for '{brawler_name}'")
+                save_path = get_json_path(f"api/assets/brawler_icons/{brawler_name_clean}.png")
+                os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                image.save(save_path)
             return
-    print(f"Icon not found for brawler '{brawler_name}'")
 
-
-def update_icons():
+def get_discord_link():
+    if api_base_url == "localhost":
+        return "https://discord.gg/xUusk3fw4A"
     try:
-        icon_link = google_play_scraper.app("com.supercell.brawlstars")["icon"]
+        url = f'https://{api_base_url}/get_discord_link'
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json().get('link', 'https://discord.gg/xUusk3fw4A')
     except:
-        time.sleep(1)
-        try:
-            icon_link = google_play_scraper.app("com.supercell.brawlstars")["icon"]
-        except Exception as e:
-            print(f"Failed to get latest icon link from Google Play Store: {e}")
-            return
-
-    response = requests.get(icon_link)
-    big_icon = 'brawl_stars_icon_big.png'
-    small_icon = 'brawl_stars_icon.png'
-    if response.status_code == 200:
-        icon_image = Image.open(BytesIO(response.content))
-
-        # big icon
-        big_icon_image = icon_image.resize((69, 69))
-        width, height = big_icon_image.size
-        left = (width - 50) / 2
-        top = (height - 50) / 2
-        right = (width + 50) / 2
-        bottom = (height + 50) / 2
-        big_icon_image = big_icon_image.crop((left, top, right, bottom))
-        big_icon_image.save(f'./state_finder/images_to_detect/{big_icon}')
-
-        # small icon resize to 16x16
-        small_icon_image = icon_image.resize((16, 16))
-        width, height = small_icon_image.size
-        left = (width - 12) / 2
-        top = (height - 12) / 2
-        right = (width + 12) / 2
-        bottom = (height + 12) / 2
-        small_icon_image = small_icon_image.crop((left, top, right, bottom))
-        small_icon_image.save(f'./state_finder/images_to_detect/{small_icon}')
-        print(f"Updated to the latest icon !")
-    else:
-        print(f"Failed to download latest icon. Status code: {response.status_code}")
-
+        pass
+    return "https://discord.gg/xUusk3fw4A"
 
 def get_latest_version():
     url = f'https://{api_base_url}/check_version'
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        return data.get('version', '')
-    else:
-        return None
+    try:
+        response = requests.get(url)
+        return response.json().get('version', '') if response.status_code == 200 else None
+    except: return None
 
 def check_version():
     if api_base_url != "localhost":
-        latest_version = get_latest_version()
-        if latest_version:
-            current_version = load_toml_as_dict("cfg/general_config.toml").get('pyla_version', '')
-            if version.parse(current_version) < version.parse(latest_version):
-                print(f"Warning: (ignore if you're using early access) You are not using the latest public version of Pyla. \nCheck the discord for the latest download link.")
-        else:
-            print("Error, couldn't get the version, please check your internet connection or go ask for help in the discord.")
-
+        latest = get_latest_version()
+        if latest:
+            current = load_toml_as_dict("cfg/general_config.toml").get('pyla_version', '')
+            if version.parse(current) < version.parse(latest):
+                print(f"Update available.")
 
 async def async_notify_user(message_type: str | None = None, screenshot: Image = None) -> None:
-    user_id = load_toml_as_dict("cfg/general_config.toml")["discord_id"]
-    webhook_url = load_toml_as_dict("cfg/general_config.toml")["personal_webhook"]
-    if not webhook_url:
-        print("Couldn't notify: no webhook configured.")
-        return
-
-    if message_type == "completed":
-        status_line = f"Pyla has completed all its targets!"
-        ping = f"<@{user_id}>"
-    elif message_type == "bot_is_stuck":
-        status_line = f"Your bot is currently stuck!"
-        ping = f"<@{user_id}>"
-    else:
-        status_line = f"Pyla completed brawler goal for {message_type}!"
-        ping = f"<@{user_id}>"
+    config = load_toml_as_dict("cfg/general_config.toml")
+    webhook_url = config.get("personal_webhook")
+    if not webhook_url: return
 
     buffer = io.BytesIO()
     screenshot.save(buffer, format="PNG")
     buffer.seek(0)
-    file = discord.File(buffer, filename="screenshot.png")
-
-    # Build the embed that holds both the text and the screenshot
-    embed = discord.Embed(description=status_line)
-    embed.set_image(url="attachment://screenshot.png")   # show the attached screenshot
-
-    # Send the embed
+    
     async with aiohttp.ClientSession() as session:
         webhook = Webhook.from_url(webhook_url, session=session)
-        print("sending webhook")
-        await webhook.send(embed=embed, file=file, username="Pyla notifier", content=ping)
-        
-def get_discord_link():
-    if api_base_url == "localhost":
-        return "https://discord.gg/xUusk3fw4A"
-    url = f'https://{api_base_url}/get_discord_link'
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        return data.get('link', '')
-    else:
-        return None
+        await webhook.send(file=discord.File(buffer, filename="screenshot.png"))
 
+# --- WALL MODEL FUNCTIONS (Required by main.py) ---
 def get_online_wall_model_hash():
-    url = f'https://{api_base_url}/get_wall_model_hash'
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        return data.get('hash', '')
-    else:
-        return None
+    try:
+        url = f'https://{api_base_url}/get_wall_model_hash'
+        response = requests.get(url)
+        return response.json().get('hash', '') if response.status_code == 200 else ""
+    except: return ""
+
+def get_latest_wall_model_file():
+    try:
+        url = f'https://{api_base_url}/get_wall_model_file'
+        response = requests.get(url)
+        if response.status_code == 200:
+            save_path = get_json_path("models/tileDetector.onnx")
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            with open(save_path, "wb") as file:
+                file.write(response.content)
+    except:
+        pass
+
+def get_latest_wall_model_classes():
+    try:
+        url = f'https://{api_base_url}/get_wall_model_classes'
+        response = requests.get(url)
+        return response.json().get('classes', []) if response.status_code == 200 else []
+    except: return []
+
+def update_wall_model_classes():
+    classes = get_latest_wall_model_classes()
+    full_config = load_toml_as_dict("cfg/bot_config.toml")
+    if classes and full_config:
+        full_config["wall_model_classes"] = classes
+        update_toml_file("cfg/bot_config.toml", full_config)
 
 def calculate_sha256(file_path):
-    """
-    Calculate the SHA-256 hash of a file.
-    """
     sha256_hash = hashlib.sha256()
-    with open(file_path, "rb") as file:
-        # Read the file in chunks to handle large files
+    path = get_json_path(file_path)
+    if not os.path.exists(path): return ""
+    with open(path, "rb") as file:
         for chunk in iter(lambda: file.read(4096), b""):
             sha256_hash.update(chunk)
     return sha256_hash.hexdigest()
 
 def current_wall_model_is_latest() -> bool:
-    """
-    Check if the current wall model is the latest version.
-    """
-    local_hash = calculate_sha256("models/tileDetector.onnx")
-    online_hash = get_online_wall_model_hash()
-    return local_hash == online_hash
+    return calculate_sha256("models/tileDetector.onnx") == get_online_wall_model_hash()
 
-def get_latest_wall_model_file():
-    #download the new model to replace the current file and also updates the tile list
-    url = f'https://{api_base_url}/get_wall_model_file'
-    response = requests.get(url)
-    if response.status_code == 200:
-        with open("./models/tileDetector.onnx", "wb") as file:
-            file.write(response.content)
-        print("Downloaded the latest wall model.")
-    else:
-        print(f"Failed to download the latest wall model. Status code: {response.status_code}")
-
-def get_latest_wall_model_classes():
-    url = f'https://{api_base_url}/get_wall_model_classes'
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        return data.get('classes', [])
-    else:
-        return None
-
-def update_wall_model_classes():
-    classes = get_latest_wall_model_classes()
-    current_classes = load_toml_as_dict("cfg/bot_config.toml")["wall_model_classes"]
-    if classes:
-        if classes != current_classes:
-            print("New wall model classes found. Updating...")
-            full_config = load_toml_as_dict("cfg/bot_config.toml")
-            full_config["wall_model_classes"] = classes
-            update_toml_file("cfg/bot_config.toml", full_config)
-            print("Updated the wall model classes.")
-    else:
-        print("Failed to update the wall model classes, please report this error.")
-
-
-def cprint(text: str, hex_color: str): #omg color!!!
+def cprint(text: str, hex_color: str):
     try:
         hex_color = hex_color.lstrip("#")
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
         print(f"\033[38;2;{r};{g};{b}m{text}\033[0m")
-    except Exception:
-        print(text)
+    except: print(text)
 
 def get_dpi_scale():
-    user32 = ctypes.windll.user32
-    user32.SetProcessDPIAware()
-    return int(user32.GetDpiForSystem())
+    return 96

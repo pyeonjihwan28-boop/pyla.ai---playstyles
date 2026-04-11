@@ -783,12 +783,21 @@
       "ignore_walls_for_attacks": false,
       "ignore_walls_for_supers": true
     },
-    "glowbert": {
-    "safe_range": 315,
-    "attack_range": 512,
-    "super_type": "damage",
-    "super_range": 362,
-    "ignore_walls_for_attacks": false,
-    "ignore_walls_for_supers": false
-  }
+    "glowy": {
+      "safe_range": 315,
+      "attack_range": 512,
+      "super_type": "damage",
+      "super_range": 362,
+      "ignore_walls_for_attacks": false,
+      "ignore_walls_for_supers": false
+    },
+    "sirius": {
+      "safe_range": 288.0,
+      "attack_range": 469.0,
+      "super_type": "other",
+      "super_range": 640,
+      "ignore_walls_for_attacks": true,
+      "ignore_walls_for_supers": true,
+      "hold_attack": 0
+    }
 }

@@ -3,15 +3,19 @@ import tkinter as tk
 from math import ceil
 
 import customtkinter as ctk
-import pyautogui
+try:
+    import pyautogui
+except:
+    class Mock:
+        def __getattr__(self, name): return lambda *a, **k: None
+    pyautogui = Mock()
 from PIL import Image
 from customtkinter import CTkImage
 from utils import load_toml_as_dict, update_toml_file, save_brawler_icon, get_dpi_scale
 from tkinter import filedialog
 
-debug = load_toml_as_dict("cfg/general_config.toml")['super_debug'] == "yes"
 orig_screen_width, orig_screen_height = 1920, 1080
-width, height = pyautogui.size()
+width, height = pyautogui.size() or (1920, 1080)
 width_ratio = width / orig_screen_width
 height_ratio = height / orig_screen_height
 scale_factor = min(width_ratio, height_ratio)
@@ -110,13 +114,8 @@ class SelectBrawler:
         self.farm_type = value
 
     def start_bot(self):
-        d = self.data_setter
-        b = self.brawlers_data
-        a = self.app
-        d(b)
-        if a:
-            try: a.destroy()
-            except: pass
+        self.data_setter(self.brawlers_data)
+        self.app.destroy()
 
     def load_brawler_config(self):
         # open file select dialog to select a json file
@@ -210,7 +209,7 @@ class SelectBrawler:
             self.brawlers_data = [item for item in self.brawlers_data if item["brawler"] != data["brawler"]]
             self.brawlers_data.append(data)
 
-            if debug: print("Selected Brawler Data :", self.brawlers_data)
+            print("Selected Brawler Data :", self.brawlers_data)
             top.destroy()
 
         submit_button = ctk.CTkButton(
@@ -225,7 +224,7 @@ class SelectBrawler:
         self.wins_button = ctk.CTkButton(farm_type_button_frame, text="Win Amount", width=int(90 * scale_factor),
                                             command=lambda: self.set_farm_type_color("wins"),
                                             hover_color=self.colors['cherry red'],
-                                            font=("", int(15 * scale_factor)),
+                                            font=("", int(13 * scale_factor)),
                                             fg_color=self.colors["ui box gray"],
                                             border_color=self.colors['cherry red'],
                                             border_width=int(2 * scale_factor)

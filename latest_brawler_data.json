@@ -1,0 +1,20 @@
+[
+    {
+        "brawler": "emz",
+        "push_until": 5,
+        "trophies": 0,
+        "wins": 0,
+        "type": "trophies",
+        "automatically_pick": false,
+        "win_streak": 0
+    },
+    {
+        "brawler": "shelly",
+        "push_until": 5,
+        "trophies": 0,
+        "wins": 0,
+        "type": "trophies",
+        "automatically_pick": true,
+        "win_streak": 0
+    }
+]

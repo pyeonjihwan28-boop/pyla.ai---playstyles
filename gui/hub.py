@@ -4,15 +4,13 @@ import customtkinter as ctk
 import webbrowser
 import os
 import time
-import pyautogui
 from PIL import Image
 import tkinter as tk
-import bettercam
 from utils import load_toml_as_dict, save_dict_as_toml, get_discord_link, get_dpi_scale
 from packaging import version
 
 orig_screen_width, orig_screen_height = 1920, 1080
-width, height = pyautogui.size()
+import tkinter as tk; root = tk.Tk(); root.withdraw(); width, height = root.winfo_screenwidth(), root.winfo_screenheight(); root.destroy()
 width_ratio = width / orig_screen_width
 height_ratio = height / orig_screen_height
 scale_factor = min(width_ratio, height_ratio)
@@ -80,7 +78,7 @@ class Hub:
         self.general_config.setdefault("cpu_or_gpu", "auto")
         self.general_config.setdefault("long_press_star_drop", "no")
         self.general_config.setdefault("trophies_multiplier", 1.0)
-        self.general_config.setdefault("current_emulator", "LDPlayer")
+        self.general_config.setdefault("current_emulator", "Waydroid")
 
         # -----------------------------------------------------------------------------------------
         # Appearance
@@ -435,8 +433,8 @@ class Hub:
 
         row_ += 1
 
-        # -----------------------------------------------------------------
-        # 4) Emulator Selection (3 rectangular buttons)
+# -----------------------------------------------------------------
+        # 4) Emulator Selection (Platform Aware)
         # -----------------------------------------------------------------
         emulator_label = ctk.CTkLabel(container, text="Select Emulator:", font=("Arial", S(20), "bold"))
         emulator_label.grid(row=row_, column=0, columnspan=2, pady=S(10))
@@ -446,29 +444,20 @@ class Hub:
         self.emulator_frame.grid(row=row_, column=0, columnspan=2, pady=S(10))
         row_ += 1
 
-        self.emu_var = tk.StringVar(value=self.general_config["current_emulator"])  # default
+        self.emu_var = tk.StringVar(value=self.general_config["current_emulator"])
 
         def handle_emulator_choice(choice):
             self.emu_var.set(choice)
-            if choice == "BlueStacks":
-                self.general_config["current_emulator"] = "BlueStacks"
-            elif choice == "LDPlayer":
-                self.general_config["current_emulator"] = "LDPlayer"
-            elif choice == "MEmu":
-                self.general_config["current_emulator"] = "MEmu"
-            else:
-                self.general_config["current_emulator"] = "Others"
+            self.general_config["current_emulator"] = choice
             save_dict_as_toml(self.general_config, self.general_config_path)
             refresh_emu_buttons()
 
         def create_emu_button(parent, text_display):
-            def on_click():
-                handle_emulator_choice(text_display)
-
+            # Using t=text_display to capture the current name in the loop
             btn = ctk.CTkButton(
                 parent,
                 text=text_display,
-                command=on_click,
+                command=lambda t=text_display: handle_emulator_choice(t),
                 corner_radius=S(6),
                 width=S(150),
                 height=S(40),
@@ -476,32 +465,34 @@ class Hub:
             )
             return btn
 
-        self.btn_ldplayer = create_emu_button(self.emulator_frame, "LDPlayer")
-        self.btn_bluestacks = create_emu_button(self.emulator_frame, "BlueStacks")
-        self.btn_memu = create_emu_button(self.emulator_frame, "MEmu")
-        self.btn_others = create_emu_button(self.emulator_frame, "Others")
+        # emulators based on what os you have
+        import platform
+        system = platform.system()
+        
+        if system == "Windows":
+            emu_list = ["LDPlayer", "BlueStacks", "MEmu", "Others"]
+        elif system == "Darwin": # Mac
+            emu_list = ["BlueStacks", "Android Studio", "PlayCover", "Others"]
+        else: # Linux
+            emu_list = ["Waydroid", "Genymotion", "AVD", "Others"]
 
-        self.btn_ldplayer.grid(row=0, column=0, padx=S(10), pady=S(5))
-        self.btn_bluestacks.grid(row=0, column=1, padx=S(10), pady=S(5))
-        self.btn_memu.grid(row=0, column=2, padx=S(10), pady=S(5))
-        self.btn_others.grid(row=0, column=3, padx=S(10), pady=S(5))
+        # Store buttons in a list to keep things organized
+        self.emu_buttons = []
+        for i, name in enumerate(emu_list):
+            btn = create_emu_button(self.emulator_frame, name)
+            btn.grid(row=0, column=i, padx=S(10), pady=S(5))
+            self.emu_buttons.append((btn, name))
 
         def refresh_emu_buttons():
             curr_emu = self.emu_var.get()
-
-            def color(btn, val):
-                if val == curr_emu:
+            for btn, name in self.emu_buttons:
+                if name == curr_emu:
                     btn.configure(fg_color="#AA2A2A", hover_color="#BB3A3A")
                 else:
                     btn.configure(fg_color="#333333", hover_color="#BB3A3A")
 
-            color(self.btn_ldplayer, "LDPlayer")
-            color(self.btn_bluestacks, "BlueStacks")
-            color(self.btn_memu, "MEmu")
-            color(self.btn_others, "Others")
-
         refresh_emu_buttons()
-
+        
         # -----------------------------------------------------------------
         # Some spacing
         # -----------------------------------------------------------------
@@ -560,7 +551,7 @@ class Hub:
         ad_label = ctk.CTkLabel(
             ad_frame,
             text="Support Pyla and get Early Access to updates by becoming a Patreon supporter -> ",
-            font=("Arial", S(18), "bold"),
+            font=("Arial", S(15), "bold"),
             text_color="#FFFFFF"
         )
         ad_label.pack(side="left")
@@ -572,7 +563,7 @@ class Hub:
         patreon_label = ctk.CTkLabel(
             ad_frame,
             text=shown_patreon_link,
-            font=("Arial", S(18), "bold"),
+            font=("Arial", S(14), "bold"),
             text_color="#3498db",
             cursor="hand2"
         )
@@ -996,41 +987,35 @@ class Hub:
     #  On Start => close window + callback
     # ---------------------------------------------------------------------------------------------
     def _on_start(self):
-        o = sys.stdout
-        e = sys.stderr
-        f1 = o.fileno()
-        f2 = e.fileno()
-        s1 = os.dup(f1)
-        s2 = os.dup(f2)
-        n = os.open(os.devnull, os.O_RDWR)
-        os.dup2(n, f1)
-        os.dup2(n, f2)
-        os.close(n)
-        a = self.app
-        if a:
-            for s in ["<ButtonPress>", "<MouseWheel>", "<KeyPress>", "<FocusOut>"]:
-                try: a.unbind_all(s)
-                except: pass
-            try: a.unbind("<Configure>")
-            except: pass
-            if self._tooltip_after_id:
-                try: a.after_cancel(self._tooltip_after_id)
-                except: pass
-            k = getattr(a, 'tk', None)
-            if k:
-                try:
-                    if k.eval('info procs ::bgerror'):
-                        k.eval('rename ::bgerror ::_bgold')
-                    k.eval('proc ::bgerror args {}')
-                except: pass
-            try: a.destroy()
-            except: pass
-        os.dup2(s1, f1)
-        os.dup2(s2, f2)
-        os.close(s1)
-        os.close(s2)
-        sys.stdout = o
-        sys.stderr = e
+        sys.stdout.flush()
+        o_out, o_err = sys.stdout, sys.stderr
+        fd_out, fd_err = o_out.fileno(), o_err.fileno()
+        saved_out, saved_err = os.dup(fd_out), os.dup(fd_err)
+        dn = os.open(os.devnull, os.O_RDWR)
+        os.dup2(dn, fd_out); os.dup2(dn, fd_err); os.close(dn)
+
+        tkint = getattr(getattr(self, 'app', None), 'tk', None)
+        renamed = False
+        if tkint:
+            try:
+                if tkint.eval('info procs ::bgerror'):
+                    tkint.eval('rename ::bgerror ::_old_bgerr'); renamed = True
+                tkint.eval('proc ::bgerror args {}')
+            except tk.TclError:
+                pass
+
+        try: self.app.destroy()
+        except Exception: pass
+        os.dup2(saved_out, fd_out); os.dup2(saved_err, fd_err)
+        os.close(saved_out); os.close(saved_err)
+        sys.stdout, sys.stderr = o_out, o_err
+
+        if tkint:
+            try:
+                tkint.eval('rename ::bgerror {}')
+                if renamed: tkint.eval('rename ::_old_bgerr ::bgerror')
+            except tk.TclError: pass
+
         if callable(self.on_close_callback):
             self.on_close_callback()
 

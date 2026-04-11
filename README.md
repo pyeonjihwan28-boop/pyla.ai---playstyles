@@ -3,44 +3,63 @@
 PylaAI is currently the best external Brawl Stars bot. This repository is intended for developers.
 
 > ⚠️ **Warning:** This repository contains the **source code**.  
-> If you are not a developer, it is recommended to use the **official compiled build** from our Discord (linked below), which comes as a ready-to-use `.exe`.
+> If you are not a developer, it is recommended to use the **official compiled build** from our Discord [found here](#-project-links),
+> which comes as a ready-to-use `.exe` for Windows users and `.sh` for Linux users
 
 ---
 
 # Supported Platforms
 - **Windows 10/11**
+- **Linux**
+- **Mac silcon**
 
 
 ## 🚀 Installation & Running
 
 ### Install Python
 
-PylaAI has been tested with:
+This version of PylaAI has been tested with:
 
 ```bash
-Python 3.11.9
+Python 3.12.3
 ```
 
-Download & install Git and Python:
+Download & install Git & Python:
 
-[Python 3.11](https://www.python.org/downloads/release/python-3119/)
+[Python 3.12](https://www.python.org/downloads/release/python-3123/) **make sure to add it to PATH on windows**
 
-[Git](https://git-scm.com/install/windows)
+[Git](https://git-scm.com/install/)
 
 ---
+## Linux & Mac
+-------------
+### environment
+1. create an environment
+`python -m venv nameoftheenv`
 
-## **Download PylaAI**
-in cmd run `git clone https://github.com/PylaAI/PylaAI.git`
+
+2. Activate your environment
+
+open up your terminal
+
+`cd Path/to/your/folder`
+
+`source nameoftheenv/bin/activate`
+
+**Note:you have to run** `source nameoftheenv/bin/activate` **everytime you open your terminal**
+
+### **Download PylaAI**
+in cmd run `git clone -b compatibility https://github.com/PylaAI/PylaAI.git`
 
 ### Run Setup
 
 run the smart installer:
 
-in cmd run `python setup.py install`
+in your terminal run `python setup.py install`
 
 ### Start Your Emulator
 
-see how you can start your emulator in https://pyla-ai.pages.dev/#starting
+see how you can setup your emulator in our [guide](https://pyla-ai.pages.dev/#docs)
 
 ---
 
@@ -52,6 +71,34 @@ Run the bot:
 
 ---
 
+## Windows
+-------------
+> you can also open an environment if you want it sperate from your
+> other python libarys learn how to do it [here](#environment)
+### **Download PylaAI**
+
+`cd Path\to\your\folder`
+
+in cmd run `git clone -b compatibility https://github.com/PylaAI/PylaAI.git`
+
+### Run Setup
+
+run the smart installer:
+
+in your cmd run `python setup.py install`
+
+### Start Your Emulator
+
+see how you can setup your emulator in our [guide](https://pyla-ai.pages.dev/#docs)
+
+---
+
+### Launch PylaAI
+
+Run the bot:
+
+`python main.py`
+------------------------
 
 ### Localhost Mode
 
@@ -76,8 +123,13 @@ To make sure changes do not introduce regressions:
 
 ## 🤝 Contribution
 
-We aren't currently accepting contributions as this repo is behind on the early-access version.
-Though feel free to make your own fork.
+Contributions are welcome.
+
+If you want to help improve PylaAI:
+
+1. Fork the repository
+2. Create a new branch
+3. Submit a Pull Request
 
 You can also open an **Issue** for bugs or feature requests.
 
@@ -85,8 +137,9 @@ You can also open an **Issue** for bugs or feature requests.
 
 ## 📌 Project Links
 
-- **[Discord](https://discord.gg/xUusk3fw4A)** Join the Pyla Server
+- **[Discord](https://discord.gg/xUusk3fw4A)** Join the PylaAi Server
 - **[Trello](https://trello.com/b/SAz9J6AA/public-pyla-trello)** see what you can contrtibute
+- **[Our Website](https://pyla-ai.pages.dev/)**
 
 ---
 
@@ -103,3 +156,5 @@ This project is **not permitted to be sold or monetized**.
 - **ivanyordanovgt** / iyordanov
 - **AngelFireLA** / AngelFire
 - **awarzu** / (M)
+
+### this was converted to Linux & Mac by: Maayan080 
