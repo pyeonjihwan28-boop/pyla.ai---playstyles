@@ -1,35 +1,126 @@
 # PylaAI
 
-PylaAI is currently the best external Brawl Stars bot.
-This repository is intended for devs and it's recommended for others to use the official version from the discord.
+PylaAI is currently the best external Brawl Stars bot. This repository is intended for developers.
 
-**Warning :** This is the source-code, which is meant for developpers or people that know how to install python libraries and run python scripts --> The official build is linked in the discord, which is the source-code converted into an exe so you don't need additional knowledge to run the bot. (You will have to go through a linkvertise link)
+> ⚠️ **Warning:** This repository contains the **source code**.  
+> If you are not a developer, it is recommended to use the **official compiled build** from our Discord (linked below), which comes as a ready-to-use `.exe`.
 
-How to run : 
-- Install python and git (tested with python 3.11.9)
-- open a cmd and type `git clone https://github.com/PylaAI/PylaAI.git`
-- run `cd PylaAI`
-- run `python setup.py install`
-- and then run `python main.py`
-- enjoy !
+---
 
-Notes :
-- This is the "localhost" version which means everything API related isn't enabled (login, online stats tracking, auto brawler list updating, auto icon updating, auto wall model updating). 
-You can make it "online" by changing the base api url in utils.py and recoding the app to answer to the different endpoints. Site's code might become opensource but currently isn't.
-- You can get the .pt version of the ai vision model at https://github.com/AngelFireLA/BrawlStarsBotMaking
-- This repository won't contain early access features before they are released to the public.
-- Please respect the "no selling" license as respect for our work.
+# Supported Platforms
+- **Windows 10/11**
 
-offical Devs : 
-- Iyordanov
-- AngelFire
-- benji
+## Hardware Support
 
-# Run tests
-Run `python -m unittest discover` to check if your changes have made any regressions. 
 
-# If you want to contribute, don't hesitate to create an Issue, a Pull Request, or/and make a ticket on the Pyla discord server at :
-https://discord.gg/xUusk3fw4A
+### Supported Hardware
 
-Don't know what to do ? Check the To-Fix and Idea lists :
-https://trello.com/b/SAz9J6AA/public-pyla-trello
+- **NVIDIA GPUs**
+  - Automatically installs compatible **CUDA + PyTorch**
+  - Optimized for **GTX 10-series → RTX 50-series**
+
+- **AMD GPUs**
+  - Native **ROCm** support for Radeon / Ryzen GPUs
+
+- **Intel / Generic GPUs**
+  - Uses **DirectML** acceleration on Windows
+  - Works well with integrated graphics
+
+- **Linux / WSL**
+  - Fully optimized for **Ubuntu / WSLg environments**
+
+---
+
+## 🚀 Installation & Running
+
+### Install Python
+
+PylaAI has been tested with:
+
+```bash
+Python 3.11.9
+```
+
+Download Python:
+
+```
+[Python 3.11](https://www.python.org/downloads/release/python-3119/)
+```
+
+---
+
+###Run Universal Setup
+
+run the smart installer:
+
+```bash
+python setup.py install
+```
+
+### Start Your Emulator
+
+see how you can start your emulator in https://pyla-ai.pages.dev/#starting
+
+---
+
+### Launch PylaAI
+
+Run the bot:
+
+```bash
+python main.py
+```
+
+---
+
+
+### Localhost Mode
+
+This open-source version runs in **localhost mode**.
+
+The following cloud features are disabled by default:
+
+- Login system
+- Cloud statistics
+- Auto updates
+- Remote API services
+
+---
+
+### Running Tests
+
+To make sure changes do not introduce regressions:
+
+```bash
+python -m unittest discover
+```
+
+---
+
+## 📌 Project Links
+
+- **[Discord](https://discord.gg/xUusk3fw4A)** Join the Pyla Server
+- **{Trello](https://trello.com/b/SAz9J6AA/public-pyla-trello)**
+
+---
+
+## ⚖️ License
+
+Please respect the **"No Selling" license** out of respect for the work of the official developers.
+
+This project is **not permitted to be sold or monetized**.
+
+---
+
+## 👨‍💻 People that have been Official Developers
+
+- **ivanyordanovgt**
+- **AngelFireLA**
+- **awarzu**
+
+## Contributors
+
+- **Maayan080**
+- **simonrejzek**
+- **bocchi-the-cat**
+- **Ariko842**
