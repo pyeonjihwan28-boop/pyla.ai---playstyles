@@ -10,6 +10,7 @@ import scrcpy
 from adbutils import adb
 
 from utils import load_toml_as_dict
+from logger import log
 
 
 def _port_open(host: str, port: int, timeout: float = 0.3) -> bool:
@@ -53,7 +54,7 @@ class WindowController:
         self.height_ratio = None
         self.joystick_x, self.joystick_y = None, None
         # --- 2. ADB & Scrcpy Connection ---
-        print("Connecting to ADB...")
+        log.info("Connecting to ADB...")
         try:
             # Connect to device (adbutils automatically handles port detection mostly)
             # but adbutils is usually smarter at finding the open device.
@@ -73,7 +74,7 @@ class WindowController:
                  raise ConnectionError("No ADB devices found.")
 
             self.device = device_list[0]
-            print(f"Connected to device: {self.device.serial}")
+            log.info(f"Connected to device: {self.device.serial}")
 
             self.frame_lock = threading.Lock()
             self.frame_cond = threading.Condition(self.frame_lock)
@@ -94,7 +95,7 @@ class WindowController:
             self.scrcpy_client.add_listener(scrcpy.EVENT_FRAME, on_frame)
             self.scrcpy_client.start(threaded=True)
             atexit.register(self.close)
-            print("Scrcpy client started successfully.")
+            log.info("Scrcpy client started successfully.")
 
         except Exception as e:
             raise ConnectionError(f"Failed to initialize Scrcpy: {e}")
@@ -116,14 +117,14 @@ class WindowController:
         self.device.app_start(BRAWL_STARS_PACKAGE)
         time.sleep(3)
         self.time_since_checked_if_brawl_stars_crashed = time.time()
-        print("Brawl stars restarted successfully.")
+        log.info("Brawl stars restarted successfully.")
 
     def screenshot(self):
         c_time = time.time()
         if c_time - self.time_since_checked_if_brawl_stars_crashed > self.check_if_brawl_stars_crashed_timer:
             opened_app = self.device.app_current().package.strip()
             if opened_app != BRAWL_STARS_PACKAGE.strip():
-                print(f"Brawl stars has crashed, {opened_app} is the app opened ! Restarting...")
+                log.warning(f"Brawl stars has crashed, {opened_app} is the app opened ! Restarting...")
                 self.device.app_start(BRAWL_STARS_PACKAGE)
                 time.sleep(3)
                 self.time_since_checked_if_brawl_stars_crashed = time.time()
@@ -144,14 +145,14 @@ class WindowController:
 
         age = time.time() - frame_time
         if frame_time > 0 and age > self.FRAME_STALE_TIMEOUT:
-            print(f"WARNING: scrcpy frame is {age:.1f}s stale -- feed may be frozen")
+            log.warning(f"scrcpy frame is {age:.1f}s stale -- feed may be frozen")
 
 
         if not self.width or not self.height:
             self.width = frame.shape[1]
             self.height = frame.shape[0]
             if (self.width, self.height) != (brawl_stars_width, brawl_stars_height):
-                print(f"⚠️⚠️⚠️Unexpected resolution: {self.width}x{self.height}. Expected {brawl_stars_width}x{brawl_stars_height}. Please set your emulator resolution to 1920x1080 for best results.")
+                log.warning(f"Unexpected resolution: {self.width}x{self.height}. Expected {brawl_stars_width}x{brawl_stars_height}. Please set your emulator resolution to 1920x1080 for best results.")
             self.width_ratio = self.width / brawl_stars_width
             self.height_ratio = self.height / brawl_stars_height
             self.joystick_x, self.joystick_y = 220 * self.width_ratio, 870 * self.height_ratio

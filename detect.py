@@ -4,13 +4,14 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 from utils import load_toml_as_dict
+from logger import log
 
 debug = load_toml_as_dict("cfg/general_config.toml")['super_debug'] == "yes"
 
 def get_optimal_threads(max_limit=4):
     threads = os.cpu_count()
     threads_amount = min(max(2, threads // 2), max_limit)
-    print(f"Detected {threads} CPU threads, using {threads_amount} threads.")
+    log.info(f"Detected {threads} CPU threads, using {threads_amount} threads.")
     return threads_amount
 
 optimal_threads_amount = get_optimal_threads()
@@ -94,14 +95,14 @@ class Detect:
         if self.preferred_device == "gpu" or self.preferred_device == "auto":
             if "CUDAExecutionProvider" in available_providers:
                 onnx_provider = "CUDAExecutionProvider"
-                print("Using CUDA GPU")
+                log.info("Using CUDA GPU")
             elif "DmlExecutionProvider" in available_providers:
                 onnx_provider = "DmlExecutionProvider"
-                print("Using GPU")
+                log.info("Using GPU")
             elif "AzureExecutionProvider" in available_providers:
                 onnx_provider = "AzureExecutionProvider"
             else:
-                print("Using CPU as no GPU provider found")
+                log.info("Using CPU as no GPU provider found")
                 onnx_provider = "CPUExecutionProvider"
 
         else:

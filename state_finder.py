@@ -3,6 +3,7 @@ import sys
 import cv2
 sys.path.append(os.path.abspath('/'))
 from utils import load_toml_as_dict
+from logger import log
 
 orig_screen_width, orig_screen_height = 1920, 1080
 
@@ -131,7 +132,7 @@ def get_state(screenshot):
     screenshot_bgr = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
     if super_debug: cv2.imwrite(f"./debug_frames/state_screenshot_{len(os.listdir('./debug_frames'))}.png", screenshot_bgr)
     state = get_in_game_state(screenshot_bgr)
-    print(f"State: {state}")
+    log.debug(f"State: {state}")
     return state
 
 

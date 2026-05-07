@@ -15,6 +15,7 @@ from utils import load_toml_as_dict, current_wall_model_is_latest, api_base_url
 from utils import get_brawler_list, update_missing_brawlers_info, check_version, async_notify_user, \
     update_wall_model_classes, get_latest_wall_model_file, get_latest_version, cprint
 from window_controller import WindowController
+from logger import log
 
 pyla_version = load_toml_as_dict("./cfg/general_config.toml")['pyla_version']
 
@@ -29,7 +30,7 @@ def pyla_main(data):
             self.Stage_manager = StageManager(data, self.lobby_automator, self.window_controller)
             self.states_requiring_data = ["lobby"]
             if data[0]['automatically_pick']:
-                print("Picking brawler automatically")
+                log.info("Picking brawler automatically")
                 self.lobby_automator.select_brawler(data[0]['brawler'])
             self.Play.current_brawler = data[0]['brawler']
             self.no_detections_action_threshold = 60 * 8
@@ -68,7 +69,7 @@ def pyla_main(data):
             if self.window_controller.device.app_current().package != window_controller.BRAWL_STARS_PACKAGE:
                 screenshot = self.window_controller.screenshot()
                 run_coro(async_notify_user("bot_is_stuck", screenshot))
-                print("Bot got stuck. User notified. Shutting down.")
+                log.error("Bot got stuck. User notified. Shutting down.")
                 self.window_controller.keys_up(list("wasd"))
                 self.window_controller.close()
                 import sys
@@ -117,7 +118,7 @@ def pyla_main(data):
                 if abs(s_time - time.time()) > 1:
                     elapsed = time.time() - s_time
                     if elapsed > 0:
-                        print(f"{c / elapsed:.2f} IPS")
+                        log.debug(f"{c / elapsed:.2f} IPS")
                     s_time = time.time()
                     c = 0
 
@@ -126,7 +127,7 @@ def pyla_main(data):
                 _, last_ft = self.window_controller.get_latest_frame()
                 if last_ft > 0 and (time.time() - last_ft) > self.window_controller.FRAME_STALE_TIMEOUT:
                     self.Play.window_controller.keys_up(list("wasd"))
-                    print("Stale frame detected -- restarting the game.")
+                    log.warning("Stale frame detected -- restarting the game.")
                     self.window_controller.restart_brawl_stars()
 
                 self.manage_time_tasks(frame)
@@ -152,7 +153,7 @@ if api_base_url != "localhost":
     check_version()
     update_wall_model_classes()
     if not current_wall_model_is_latest():
-        print("New Wall detection model found, downloading... (this might take a few minutes depending on your internet speed)")
+        log.info("New Wall detection model found, downloading... (this might take a few minutes depending on your internet speed)")
         get_latest_wall_model_file()
 
 # Use the smaller ratio to maintain aspect ratio

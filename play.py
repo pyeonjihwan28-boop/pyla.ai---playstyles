@@ -6,6 +6,7 @@ import cv2
 from state_finder import get_state
 from detect import Detect
 from utils import load_toml_as_dict, count_hsv_pixels, load_brawlers_info
+from logger import log
 
 brawl_stars_width, brawl_stars_height = 1920, 1080
 debug = load_toml_as_dict("cfg/general_config.toml")['super_debug'] == "yes"
@@ -77,15 +78,15 @@ class Movement:
         self.window_controller.press_key("M", touch_up=touch_up, touch_down=touch_down)
 
     def use_hypercharge(self):
-        print("Using hypercharge")
+        log.info("Using hypercharge")
         self.window_controller.press_key("H")
 
     def use_gadget(self):
-        print("Using gadget")
+        log.info("Using gadget")
         self.window_controller.press_key("G")
 
     def use_super(self):
-        print("Using super")
+        log.info("Using super")
         self.window_controller.press_key("E")
 
     @staticmethod
@@ -254,7 +255,7 @@ class Play(Movement):
             for move in alternative_moves:
                 if not self.is_path_blocked(player_position, move, walls):
                     return move
-            print("no movement possible ?")
+            log.warning("no movement possible ?")
             # If no movement is possible, return empty string
             return preferred_movement
 
@@ -370,7 +371,7 @@ class Play(Movement):
         screenshot = frame[y1:y2, x1:x2]
         purple_pixels = count_hsv_pixels(screenshot, (137, 158, 159), (179, 255, 255))
         if debug:
-            print("hypercharge purple pixels:", purple_pixels, "(if > ", self.hypercharge_pixels_minimum, " then hypercharge is ready)")
+            log.debug(f"hypercharge purple pixels: {purple_pixels} (ready if > {self.hypercharge_pixels_minimum})")
             cv2.imwrite(f"debug_frames/hypercharge_debug_{int(time.time())}.png", cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR))
         if purple_pixels > self.hypercharge_pixels_minimum:
             return True
@@ -383,7 +384,7 @@ class Play(Movement):
         screenshot = frame[y1:y2, x1:x2]
         green_pixels = count_hsv_pixels(screenshot, (57, 219, 165), (62, 255, 255))
         if debug:
-            print("gadget green pixels:", green_pixels, "(if > ", self.gadget_pixels_minimum, " then gadget is ready)")
+            log.debug(f"gadget green pixels: {green_pixels} (ready if > {self.gadget_pixels_minimum})")
             cv2.imwrite(f"debug_frames/gadget_debug_{int(time.time())}.png", cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR))
         if green_pixels > self.gadget_pixels_minimum:
             return True
@@ -396,7 +397,7 @@ class Play(Movement):
         screenshot = frame[y1:y2, x1:x2]
         yellow_pixels = count_hsv_pixels(screenshot, (17, 170, 200), (27, 255, 255))
         if debug:
-            print("super yellow pixels:", yellow_pixels, "(if > ", self.super_pixels_minimum, " then super is ready)")
+            log.debug(f"super yellow pixels: {yellow_pixels} (ready if > {self.super_pixels_minimum})")
             cv2.imwrite(f"debug_frames/super_debug_{int(time.time())}.png", cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR))
 
         if yellow_pixels > self.super_pixels_minimum:
@@ -438,13 +439,13 @@ class Play(Movement):
 
         safe_range, attack_range, super_range = self.get_brawler_range(brawler)
         player_pos = self.get_player_pos(player_data)
-        if debug: print("found player pos:", player_pos)
+        if debug: log.debug(f"found player pos: {player_pos}")
         if not self.is_there_enemy(enemy_data):
             return self.no_enemy_movement(player_data, walls)
         enemy_coords, enemy_distance = self.find_closest_enemy(enemy_data, player_pos, walls, "attack")
         if enemy_coords is None:
             return self.no_enemy_movement(player_data, walls)
-        if debug: print("found enemy pos:", enemy_coords)
+        if debug: log.debug(f"found enemy pos: {enemy_coords}")
         direction_x = enemy_coords[0] - player_pos[0]
         direction_y = enemy_coords[1] - player_pos[1]
 
@@ -470,7 +471,7 @@ class Play(Movement):
                 movement = move
                 break
         else:
-            print("default paths are blocked")
+            log.debug("default paths are blocked")
             # If all preferred directions are blocked, try other directions
             alternative_moves = ['W', 'A', 'S', 'D']
             random.shuffle(alternative_moves)
@@ -574,7 +575,7 @@ class Play(Movement):
                 if current_state != "match":
                     self.time_since_last_proceeding = current_time
                 else:
-                    print("haven't detected the player in a while proceeding")
+                    log.info("haven't detected the player in a while proceeding")
                     self.window_controller.press_key("Q")
                     self.time_since_last_proceeding = time.time()
             return
