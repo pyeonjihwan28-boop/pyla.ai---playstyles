@@ -13,7 +13,6 @@ import discord
 import cv2
 import numpy as np
 from packaging import version
-import easyocr
 
 def extract_text_and_positions(image_path):
     results = reader.readtext(image_path)
@@ -37,10 +36,16 @@ def extract_text_and_positions(image_path):
 
 class DefaultEasyOCR:
     def __init__(self):
-        self.reader = easyocr.Reader(['en'])
+        self.reader = None
+
+    def _ensure_reader(self):
+        if self.reader is None:
+            import easyocr
+            self.reader = easyocr.Reader(['en'])
+        return self.reader
 
     def readtext(self, image_input):
-        return self.reader.readtext(image_input)
+        return self._ensure_reader().readtext(image_input)
 
 
 cached_toml = {}
