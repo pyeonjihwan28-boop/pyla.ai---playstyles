@@ -1,5 +1,6 @@
 import atexit
 import math
+import socket
 import threading
 import time
 import cv2
@@ -9,6 +10,17 @@ import scrcpy
 from adbutils import adb
 
 from utils import load_toml_as_dict
+
+
+def _port_open(host: str, port: int, timeout: float = 0.3) -> bool:
+    """Probe a TCP endpoint with a short timeout. adb.connect blocks for
+    seconds per closed port; this skips the call when nothing is listening."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(timeout)
+        try:
+            return sock.connect_ex((host, port)) == 0
+        except OSError:
+            return False
 
 # --- Configuration ---
 brawl_stars_width, brawl_stars_height = 1920, 1080
@@ -47,12 +59,14 @@ class WindowController:
             # but adbutils is usually smarter at finding the open device.
             device_list = adb.device_list()
             if not device_list:
-                # Try connecting to common ports if empty
-                for port in [load_toml_as_dict("cfg/general_config.toml")["emulator_port"], 5555, 16384, 5635] + list(range(5565, 5756, 10)):
+                candidate_ports = [load_toml_as_dict("cfg/general_config.toml")["emulator_port"], 5555, 16384, 5635] + list(range(5565, 5756, 10))
+                for port in candidate_ports:
+                    if not _port_open("127.0.0.1", port):
+                        continue
                     try:
-                         adb.connect(f"127.0.0.1:{port}")
+                        adb.connect(f"127.0.0.1:{port}")
                     except Exception:
-                         pass
+                        pass
                 device_list = adb.device_list()
 
             if not device_list:
