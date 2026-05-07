@@ -35,14 +35,6 @@ def notify_user(message_type):
             f'Failed to send message. Be sure to have put a valid webhook url in the config. Status code: {response.status_code}')
 
 
-def load_image(image_path, scale_factor):
-    image = cv2.imread(image_path)
-    orig_height, orig_width = image.shape[:2]
-    new_width = int(orig_width * scale_factor)
-    new_height = int(orig_height * scale_factor)
-    return cv2.resize(image, (new_width, new_height))
-
-
 # Inter-tick pacing for the FSM. The previous implementation used time.sleep
 # inside long while-loops which froze the main bot tick for up to 30s; the
 # new model returns from each handler within one tick and uses these to
