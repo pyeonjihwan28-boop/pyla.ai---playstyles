@@ -292,7 +292,9 @@ class StageManager:
     def close_pop_up(self):
         screenshot = self.window_controller.screenshot()
         if self.close_popup_icon is None:
-            self.close_popup_icon = load_image("images/states/close_popup.png", self.window_controller.scale_factor)
+            # Frame is canonical 1920x1080 — load template at native PNG size,
+            # no per-device scale_factor resize.
+            self.close_popup_icon = cv2.imread("images/states/close_popup.png")
         popup_location = find_template_center(screenshot, self.close_popup_icon)
         if popup_location:
             self.window_controller.click(*popup_location)
