@@ -508,7 +508,18 @@ class Play(Movement):
                     self.time_since_hypercharge_checked = time.time()
                     self.is_hypercharge_ready = False
                 self.use_super()
-                self.time_since_super_checked = time.time()
+                # Confirm super was actually consumed before suppressing
+                # re-checks for super_treshold seconds. If the press
+                # didn't fire (input miss, mid-animation, etc.) the
+                # yellow-pixel meter stays full; force a fresh check
+                # on the next frame instead of waiting out the treshold.
+                time.sleep(0.15)
+                fresh_frame = self.window_controller.screenshot()
+                if self.check_if_super_ready(fresh_frame):
+                    log.debug("super press did not consume super, retrying soon")
+                    self.time_since_super_checked = 0
+                else:
+                    self.time_since_super_checked = time.time()
                 self.is_super_ready = False
 
         # Attack if enemy is within attack range and hittable
