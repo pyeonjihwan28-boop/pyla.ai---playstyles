@@ -1,8 +1,9 @@
 import os.path
 import sys
 
-import asyncio
 import time
+
+from async_runtime import run_coro
 
 import cv2
 import numpy as np
@@ -106,24 +107,14 @@ class StageManager:
             if len(self.brawlers_pick_data) <= 1:
                 print("Brawler reached required trophies/wins. No more brawlers selected for pushing in the menu. "
                       "Bot will now pause itself until closed.", value, push_current_brawler_till)
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    screenshot = self.window_controller.screenshot()
-                    loop.run_until_complete(async_notify_user("completed", screenshot))
-                finally:
-                    loop.close()
+                screenshot = self.window_controller.screenshot()
+                run_coro(async_notify_user("completed", screenshot))
                 print("Bot stopping: all targets completed with no more brawlers.")
                 self.window_controller.keys_up(list("wasd"))
                 self.window_controller.close()
                 sys.exit(0)
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                screenshot = self.window_controller.screenshot()
-                loop.run_until_complete(async_notify_user(self.brawlers_pick_data[0]["brawler"], screenshot))
-            finally:
-                loop.close()
+            screenshot = self.window_controller.screenshot()
+            run_coro(async_notify_user(self.brawlers_pick_data[0]["brawler"], screenshot))
             self.brawlers_pick_data.pop(0)
             self.Trophy_observer.change_trophies(self.brawlers_pick_data[0]['trophies'])
             self.Trophy_observer.current_wins = self.brawlers_pick_data[0]['wins'] if self.brawlers_pick_data[0]['wins'] != "" else 0
@@ -203,13 +194,8 @@ class StageManager:
                         print(
                             "Brawler reached required trophies/wins. No more brawlers selected for pushing in the menu. "
                             "Bot will now pause itself until closed.")
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        try:
-                            screenshot = self.window_controller.screenshot()
-                            loop.run_until_complete(async_notify_user("completed", screenshot))
-                        finally:
-                            loop.close()
+                        screenshot = self.window_controller.screenshot()
+                        run_coro(async_notify_user("completed", screenshot))
                         if os.path.exists("latest_brawler_data.json"):
                             os.remove("latest_brawler_data.json")
                         print("Bot stopping: all targets completed.")

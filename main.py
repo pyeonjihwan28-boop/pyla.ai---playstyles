@@ -1,7 +1,7 @@
-import asyncio
 import time
 
 import window_controller
+from async_runtime import run_coro
 from gui.hub import Hub
 from gui.login import login
 from gui.main import App
@@ -66,13 +66,8 @@ def pyla_main(data):
             self.Play.time_since_detections["player"] = time.time()
             self.Play.time_since_detections["enemy"] = time.time()
             if self.window_controller.device.app_current().package != window_controller.BRAWL_STARS_PACKAGE:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    screenshot = self.window_controller.screenshot()
-                    loop.run_until_complete(async_notify_user("bot_is_stuck", screenshot))
-                finally:
-                    loop.close()
+                screenshot = self.window_controller.screenshot()
+                run_coro(async_notify_user("bot_is_stuck", screenshot))
                 print("Bot got stuck. User notified. Shutting down.")
                 self.window_controller.keys_up(list("wasd"))
                 self.window_controller.close()
