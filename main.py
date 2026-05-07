@@ -108,6 +108,12 @@ def pyla_main(data, bot_controller=None):
             s_time = time.time()
             c = 0
             while True:
+                if self.bot_controller is not None and self.bot_controller.stop_event.is_set():
+                    break
+                if self.bot_controller is not None and self.bot_controller.pause_event.is_set():
+                    self.window_controller.keys_up(list("wasd"))
+                    self.bot_controller.pause_event.wait()
+                    continue
                 if self.max_ips:
                     frame_start = time.perf_counter()
                 if self.run_for_minutes > 0 and not self.in_cooldown:
