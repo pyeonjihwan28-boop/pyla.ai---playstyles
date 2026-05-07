@@ -240,7 +240,7 @@ class StageManager:
             log.debug("Pressing Q again")
             self.window_controller.press_key("Q")
         
-        log.info("Game has ended", current_state)
+        log.info(f"Game has ended {current_state}")
 
     def quit_shop(self):
         self.window_controller.click(100*self.window_controller.width_ratio, 60*self.window_controller.height_ratio)
