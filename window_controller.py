@@ -153,10 +153,18 @@ class WindowController:
             self.height = frame.shape[0]
             if (self.width, self.height) != (brawl_stars_width, brawl_stars_height):
                 log.warning(f"Unexpected resolution: {self.width}x{self.height}. Expected {brawl_stars_width}x{brawl_stars_height}. Please set your emulator resolution to 1920x1080 for best results.")
+            # width_ratio / height_ratio / scale_factor are now ONLY used to
+            # translate canonical (1920x1080) input coords into device
+            # touch coords for scrcpy. The vision pipeline below sees a
+            # canonical-resized frame regardless of source resolution.
             self.width_ratio = self.width / brawl_stars_width
             self.height_ratio = self.height / brawl_stars_height
             self.joystick_x, self.joystick_y = 220 * self.width_ratio, 870 * self.height_ratio
             self.scale_factor = min(self.width_ratio, self.height_ratio)
+
+        if frame.shape[1] != brawl_stars_width or frame.shape[0] != brawl_stars_height:
+            interp = cv2.INTER_AREA if frame.shape[1] > brawl_stars_width else cv2.INTER_LINEAR
+            frame = cv2.resize(frame, (brawl_stars_width, brawl_stars_height), interpolation=interp)
 
         return frame
     def touch_down(self, x, y, pointer_id=0):

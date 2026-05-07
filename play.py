@@ -195,14 +195,13 @@ class Play(Movement):
     def load_brawler_ranges(self, brawlers_info=None):
         if not brawlers_info:
             brawlers_info = load_brawlers_info()
-        screen_size_ratio = self.window_controller.scale_factor
+        # Frame is canonical 1920x1080 — ranges are already tuned for that scale.
         ranges = {}
         for brawler, info in brawlers_info.items():
             attack_range = info['attack_range']
             safe_range = info['safe_range']
             super_range = info['super_range']
-            v = [safe_range, attack_range, super_range]
-            ranges[brawler] = [int(v[0] * screen_size_ratio), int(v[1] * screen_size_ratio), int(v[2] * screen_size_ratio)]
+            ranges[brawler] = [int(safe_range), int(attack_range), int(super_range)]
         return ranges
 
     @staticmethod
@@ -294,7 +293,7 @@ class Play(Movement):
 
     def is_path_blocked(self, player_pos, move_direction, walls, distance=None):  # Increased distance
         if distance is None:
-            distance = self.TILE_SIZE*self.window_controller.scale_factor
+            distance = self.TILE_SIZE
         dx, dy = 0, 0
         if 'w' in move_direction.lower():
             dy -= distance
@@ -363,9 +362,7 @@ class Play(Movement):
         return movement
 
     def check_if_hypercharge_ready(self, frame):
-        wr, hr = self.window_controller.width_ratio, self.window_controller.height_ratio
-        x1, y1 = int(hypercharge_crop_area[0] * wr), int(hypercharge_crop_area[1] * hr)
-        x2, y2 = int(hypercharge_crop_area[2] * wr), int(hypercharge_crop_area[3] * hr)
+        x1, y1, x2, y2 = hypercharge_crop_area
         screenshot = frame[y1:y2, x1:x2]
         purple_pixels = count_hsv_pixels(screenshot, (137, 158, 159), (179, 255, 255))
         if debug:
@@ -376,9 +373,7 @@ class Play(Movement):
         return False
 
     def check_if_gadget_ready(self, frame):
-        wr, hr = self.window_controller.width_ratio, self.window_controller.height_ratio
-        x1, y1 = int(gadget_crop_area[0] * wr), int(gadget_crop_area[1] * hr)
-        x2, y2 = int(gadget_crop_area[2] * wr), int(gadget_crop_area[3] * hr)
+        x1, y1, x2, y2 = gadget_crop_area
         screenshot = frame[y1:y2, x1:x2]
         green_pixels = count_hsv_pixels(screenshot, (57, 219, 165), (62, 255, 255))
         if debug:
@@ -389,9 +384,7 @@ class Play(Movement):
         return False
 
     def check_if_super_ready(self, frame):
-        wr, hr = self.window_controller.width_ratio, self.window_controller.height_ratio
-        x1, y1 = int(super_crop_area[0] * wr), int(super_crop_area[1] * hr)
-        x2, y2 = int(super_crop_area[2] * wr), int(super_crop_area[3] * hr)
+        x1, y1, x2, y2 = super_crop_area
         screenshot = frame[y1:y2, x1:x2]
         yellow_pixels = count_hsv_pixels(screenshot, (17, 170, 200), (27, 255, 255))
         if debug:

@@ -36,14 +36,11 @@ TEMPLATE_THRESHOLDS = {
 
 
 def is_template_in_region(image, template_path, region):
-    current_height, current_width = image.shape[:2]
+    # Frame is canonical 1920x1080 (resized by WindowController.screenshot),
+    # so region coords from lobby_config.toml are used directly.
     orig_x, orig_y, orig_width, orig_height = region
-    width_ratio, height_ratio = current_width / orig_screen_width, current_height / orig_screen_height
-
-    new_x, new_y = int(orig_x * width_ratio), int(orig_y * height_ratio)
-    new_width, new_height = int(orig_width * width_ratio), int(orig_height * height_ratio)
-    cropped_image = image[new_y:new_y + new_height, new_x:new_x + new_width]
-    loaded_template = load_template(template_path, current_width, current_height)
+    cropped_image = image[orig_y:orig_y + orig_height, orig_x:orig_x + orig_width]
+    loaded_template = load_template(template_path)
     result = cv2.matchTemplate(cropped_image, loaded_template,
                                cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
@@ -52,15 +49,12 @@ def is_template_in_region(image, template_path, region):
 
 cached_templates = {}
 
-def load_template(image_path, width, height):
-    if (image_path, width, height) in cached_templates:
-        return cached_templates[(image_path, width, height)]
-    current_width_ratio, current_height_ratio = width / orig_screen_width, height / orig_screen_height
+def load_template(image_path):
+    if image_path in cached_templates:
+        return cached_templates[image_path]
     image = cv2.imread(image_path)
-    orig_height, orig_width = image.shape[:2]
-    resized_image = cv2.resize(image, (int(orig_width * current_width_ratio), int(orig_height * current_height_ratio)))
-    cached_templates[(image_path, width, height)] = resized_image
-    return resized_image
+    cached_templates[image_path] = image
+    return image
 
 crop_region = load_toml_as_dict("./cfg/lobby_config.toml")['lobby']['trophy_observer']
 def find_game_result(screenshot):
