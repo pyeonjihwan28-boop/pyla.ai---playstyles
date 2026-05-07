@@ -171,5 +171,20 @@ if api_base_url != "localhost":
         get_latest_wall_model_file()
 
 # Use the smaller ratio to maintain aspect ratio
-app = App(login, SelectBrawler, pyla_main, all_brawlers, Hub)
-app.start(pyla_version, get_latest_version)
+import os
+if os.environ.get("PYLA_LEGACY_UI") == "1":
+    # Legacy entry preserved as fallback (PYLA_LEGACY_UI=1 to opt back in).
+    app = App(login, SelectBrawler, pyla_main, all_brawlers, Hub)
+    app.start(pyla_version, get_latest_version)
+else:
+    from gui.app_v2 import TabbedApp
+
+    def _legacy_brawlers_provider():
+        # Stage 1 placeholder: launches the existing wizard to gather a
+        # brawlers list. Stage 2 replaces this with API-driven roster picker.
+        legacy_app = App(login, SelectBrawler, lambda data: data, all_brawlers, Hub)
+        legacy_app.start(pyla_version, get_latest_version)
+        return getattr(legacy_app, "_pyla_data", []) or []
+
+    tabbed = TabbedApp(_legacy_brawlers_provider, pyla_version=pyla_version)
+    tabbed.start()
