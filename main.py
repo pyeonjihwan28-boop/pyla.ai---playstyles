@@ -21,15 +21,19 @@ from config import get_settings
 _settings = get_settings()
 pyla_version = _settings.general.pyla_version
 
-def pyla_main(data):
+def pyla_main(data, bot_controller=None):
     class Main:
 
         def __init__(self):
+            self.bot_controller = bot_controller
             self.window_controller = WindowController()
             self.Play = Play(*self.load_models(), self.window_controller)
             self.Time_management = TimeManagement()
             self.lobby_automator = LobbyAutomation(self.window_controller)
-            self.Stage_manager = StageManager(data, self.lobby_automator, self.window_controller)
+            self.Stage_manager = StageManager(
+                data, self.lobby_automator, self.window_controller,
+                bot_controller=bot_controller,
+            )
             self.states_requiring_data = ["lobby"]
             if data[0]['automatically_pick']:
                 log.info("Picking brawler automatically")
@@ -73,6 +77,9 @@ def pyla_main(data):
                 run_coro(async_notify_user("bot_is_stuck", screenshot))
                 log.error("Bot got stuck. User notified. Shutting down.")
                 self.window_controller.keys_up(list("wasd"))
+                if self.bot_controller is not None:
+                    self.bot_controller.signal_completion("stuck")
+                    return
                 self.window_controller.close()
                 import sys
                 sys.exit(1)

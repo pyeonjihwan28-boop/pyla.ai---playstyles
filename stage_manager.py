@@ -47,7 +47,8 @@ _LOBBY_RETRY_MAX_ATTEMPTS = 30
 
 class StageManager:
 
-    def __init__(self, brawlers_data, lobby_automator, window_controller):
+    def __init__(self, brawlers_data, lobby_automator, window_controller, bot_controller=None):
+        self.bot_controller = bot_controller
         self.Lobby_automation = lobby_automator
         self.lobby_config = _settings.lobby.model_dump()
         self.close_popup_icon = None
@@ -117,6 +118,9 @@ class StageManager:
             os.remove("latest_brawler_data.json")
         log.info("Bot stopping: all targets completed.")
         self.window_controller.keys_up(list("wasd"))
+        if self.bot_controller is not None:
+            self.bot_controller.signal_completion("targets_completed")
+            return
         self.window_controller.close()
         sys.exit(0)
 
@@ -140,6 +144,9 @@ class StageManager:
                 run_coro(async_notify_user("completed", screenshot))
                 log.info("Bot stopping: all targets completed with no more brawlers.")
                 self.window_controller.keys_up(list("wasd"))
+                if self.bot_controller is not None:
+                    self.bot_controller.signal_completion("targets_completed_no_brawlers")
+                    return
                 self.window_controller.close()
                 sys.exit(0)
             screenshot = self.window_controller.screenshot()
