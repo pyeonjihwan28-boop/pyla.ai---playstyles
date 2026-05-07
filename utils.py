@@ -38,14 +38,11 @@ class DefaultEasyOCR:
     def __init__(self):
         self.reader = None
 
-    def _ensure_reader(self):
+    def readtext(self, image_input):
         if self.reader is None:
             import easyocr
             self.reader = easyocr.Reader(['en'])
-        return self.reader
-
-    def readtext(self, image_input):
-        return self._ensure_reader().readtext(image_input)
+        return self.reader.readtext(image_input)
 
 
 cached_toml = {}
