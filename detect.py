@@ -2,17 +2,8 @@ import os
 
 import cv2
 import numpy as np
-import torch
 import onnxruntime as ort
-from ultralytics.utils.nms import non_max_suppression
 from utils import load_toml_as_dict
-import warnings
-
-warnings.filterwarnings(
-    "ignore",
-    message=".*'pin_memory' argument is set as true but no accelerator is found.*",
-    category=UserWarning
-)
 
 debug = load_toml_as_dict("cfg/general_config.toml")['super_debug'] == "yes"
 
@@ -23,7 +14,65 @@ def get_optimal_threads(max_limit=4):
     return threads_amount
 
 optimal_threads_amount = get_optimal_threads()
-torch.set_num_threads(optimal_threads_amount)
+
+
+def _nms_numpy(preds, conf_thres=0.6, iou_thres=0.6):
+    """YOLOv8 ONNX postprocess + per-class NMS using numpy + cv2.dnn.NMSBoxes.
+
+    preds shape: (1, 4+nc, na) (default YOLOv8 ONNX export) or (1, na, 4+nc).
+    Returns: list with one numpy array per batch image, shape (n, 6):
+        [x1, y1, x2, y2, conf, cls].
+    """
+    if preds.ndim == 3 and preds.shape[1] < preds.shape[2]:
+        preds = preds.transpose(0, 2, 1)
+
+    results = []
+    for batch_pred in preds:  # (na, 4+nc)
+        boxes_xywh = batch_pred[:, :4]
+        class_scores = batch_pred[:, 4:]
+        cls_ids = np.argmax(class_scores, axis=1)
+        confs = class_scores[np.arange(len(cls_ids)), cls_ids]
+
+        mask = confs >= conf_thres
+        if not np.any(mask):
+            results.append(np.zeros((0, 6), dtype=np.float32))
+            continue
+
+        boxes_xywh = boxes_xywh[mask]
+        confs = confs[mask].astype(np.float32)
+        cls_ids = cls_ids[mask]
+
+        x, y, w, h = boxes_xywh[:, 0], boxes_xywh[:, 1], boxes_xywh[:, 2], boxes_xywh[:, 3]
+        x1 = x - w / 2
+        y1 = y - h / 2
+        x2 = x + w / 2
+        y2 = y + h / 2
+
+        boxes_xywh_topleft = np.stack([x1, y1, x2 - x1, y2 - y1], axis=1).astype(np.float32)
+
+        keep_indices = []
+        for c in np.unique(cls_ids):
+            cmask = cls_ids == c
+            cbboxes = boxes_xywh_topleft[cmask].tolist()
+            cconfs = confs[cmask].tolist()
+            idx = cv2.dnn.NMSBoxes(cbboxes, cconfs, conf_thres, iou_thres)
+            if len(idx) == 0:
+                continue
+            idx = np.array(idx).flatten()
+            global_idx = np.where(cmask)[0][idx]
+            keep_indices.extend(global_idx.tolist())
+
+        if not keep_indices:
+            results.append(np.zeros((0, 6), dtype=np.float32))
+            continue
+
+        keep = np.array(keep_indices, dtype=int)
+        out = np.stack([
+            x1[keep], y1[keep], x2[keep], y2[keep],
+            confs[keep], cls_ids[keep].astype(np.float32)
+        ], axis=1).astype(np.float32)
+        results.append(out)
+    return results
 
 class Detect:
     def __init__(self, model_path, ignore_classes=None, classes=None, input_size=(640, 640)):
@@ -80,31 +129,22 @@ class Detect:
         return self._padded_img_buffer, new_w, new_h
 
     def postprocess(self, preds, img, orig_img_shape, resized_shape, conf_tresh=0.6):
-        # Apply Non-Maximum Suppression (NMS)
-
-        preds = non_max_suppression(
-            preds,
-            conf_thres=conf_tresh,
-            iou_thres=0.6,
-            classes=None,
-            agnostic=False,
-        )
+        preds = _nms_numpy(preds, conf_thres=conf_tresh, iou_thres=0.6)
 
         orig_h, orig_w = orig_img_shape
         resized_w, resized_h = resized_shape
 
-        # Calculate the scaling factor and padding
         scale_w = orig_w / resized_w
         scale_h = orig_h / resized_h
 
         results = []
         for pred in preds:
             if len(pred):
-                pred[:, 0] *= scale_w  # x1
-                pred[:, 1] *= scale_h  # y1
-                pred[:, 2] *= scale_w  # x2
-                pred[:, 3] *= scale_h  # y2
-                results.append(pred.cpu().numpy())
+                pred[:, 0] *= scale_w
+                pred[:, 1] *= scale_h
+                pred[:, 2] *= scale_w
+                pred[:, 3] *= scale_h
+                results.append(pred)
 
         return results
 
@@ -116,11 +156,9 @@ class Detect:
         preprocessed_img, resized_w, resized_h = self.preprocess_image(img)
         resized_shape = (resized_w, resized_h)
 
-        # Run inference
         outputs = self.model.run(None, {'images': preprocessed_img})
 
-        # Postprocess the outputs
-        detections = self.postprocess(torch.from_numpy(outputs[0]), preprocessed_img, orig_img_shape, resized_shape, conf_tresh)
+        detections = self.postprocess(outputs[0], preprocessed_img, orig_img_shape, resized_shape, conf_tresh)
 
         results = {}
         for detection in detections:

@@ -7,11 +7,9 @@ onnxruntime-directml
 pyautogui~=0.9.54
 requests~=2.32.4
 toml~=0.10.2
-torch
 pillow~=11.2.1
 discord.py
 shapely~=2.1.1
-ultralytics~=8.3.233
 packaging~=25.0
 pywin32
 easyocr~=1.7.2

@@ -72,7 +72,6 @@ install_requires = [
     "packaging>=23.1",
     "pyautogui>=0.9.54",
     "typing-extensions>=4.7.0",
-    "ultralytics>=8.0.0",
     "numpy<2",
     "ninja",
     "aiohttp>=3.9.0"
