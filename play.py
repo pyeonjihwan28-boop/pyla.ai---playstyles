@@ -538,9 +538,6 @@ class Play(Movement):
         self.last_walls_data = []
         self.time_since_walls_checked = 0
 
-    def on_match_end(self):
-        self._walls_locked = False
-
     def main(self, frame, brawler, main):
         current_time = time.time()
         data = self.get_main_data(frame)

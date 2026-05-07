@@ -79,8 +79,6 @@ def pyla_main(data):
                 state = get_state(frame)
                 if state == "match" and self.state != "match":
                     self.Play.on_match_start()
-                elif state != "match" and self.state == "match":
-                    self.Play.on_match_end()
                 self.state = state
                 if state != "match":
                     self.Play.time_since_last_proceeding = time.time()
