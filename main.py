@@ -182,9 +182,10 @@ else:
     def _legacy_brawlers_provider():
         # Stage 1 placeholder: launches the existing wizard to gather a
         # brawlers list. Stage 2 replaces this with API-driven roster picker.
-        legacy_app = App(login, SelectBrawler, lambda data: data, all_brawlers, Hub)
+        captured = {"data": []}
+        legacy_app = App(login, SelectBrawler, lambda data: captured.update(data=data), all_brawlers, Hub)
         legacy_app.start(pyla_version, get_latest_version)
-        return getattr(legacy_app, "_pyla_data", []) or []
+        return captured["data"]
 
     tabbed = TabbedApp(_legacy_brawlers_provider, pyla_version=pyla_version)
     tabbed.start()
