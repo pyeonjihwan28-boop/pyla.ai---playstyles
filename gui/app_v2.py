@@ -10,6 +10,7 @@ Bot thread NEVER touches widgets — UI thread polls update_queue via
 root.after() and applies state diffs to the Live tab labels.
 """
 import queue
+import threading
 from typing import Callable
 
 import customtkinter as ctk
@@ -24,6 +25,8 @@ from bot_state import (
     STATUS_STOPPED,
 )
 from logger import log
+from utils import load_toml_as_dict, save_dict_as_toml
+import bs_api
 
 
 _POLL_INTERVAL_MS = 100
@@ -128,12 +131,81 @@ class TabbedApp:
             parent, text="Settings",
             font=("Segoe UI", 22, "bold"),
         ).pack(anchor="w", padx=20, pady=(20, 6))
+
+        bs_section = ctk.CTkFrame(parent)
+        bs_section.pack(fill="x", padx=20, pady=(0, 12))
         ctk.CTkLabel(
-            parent,
-            text=("Stage 2/4: Brawl Stars API token, polling interval,\n"
-                  "winstreak inference toggle, debug flags."),
+            bs_section, text="Brawl Stars API",
+            font=("Segoe UI", 16, "bold"),
+        ).pack(anchor="w", padx=12, pady=(10, 4))
+        ctk.CTkLabel(
+            bs_section,
+            text=("Token tied to your public IP. Get one at developer.brawlstars.com\n"
+                  "→ Create New Key → enter your current IP. Token works only from that IP."),
             justify="left",
-        ).pack(anchor="w", padx=20, pady=(0, 12))
+            text_color="#9aa0a6",
+        ).pack(anchor="w", padx=12, pady=(0, 8))
+
+        login_cfg = load_toml_as_dict("cfg/login.toml")
+        token_initial = login_cfg.get("bs_api_token", "")
+        tag_initial = login_cfg.get("player_tag", "")
+
+        token_row = ctk.CTkFrame(bs_section, fg_color="transparent")
+        token_row.pack(fill="x", padx=12, pady=4)
+        ctk.CTkLabel(token_row, text="API token:", width=110, anchor="w").pack(side="left")
+        self.token_entry = ctk.CTkEntry(token_row, show="*", width=480)
+        self.token_entry.pack(side="left", padx=(0, 8))
+        self.token_entry.insert(0, token_initial)
+        self._token_visible = False
+
+        def _toggle_token_visibility():
+            self._token_visible = not self._token_visible
+            self.token_entry.configure(show="" if self._token_visible else "*")
+            show_btn.configure(text="Hide" if self._token_visible else "Show")
+
+        show_btn = ctk.CTkButton(token_row, text="Show", width=70, command=_toggle_token_visibility)
+        show_btn.pack(side="left")
+
+        tag_row = ctk.CTkFrame(bs_section, fg_color="transparent")
+        tag_row.pack(fill="x", padx=12, pady=4)
+        ctk.CTkLabel(tag_row, text="Player tag:", width=110, anchor="w").pack(side="left")
+        self.tag_entry = ctk.CTkEntry(tag_row, width=480)
+        self.tag_entry.pack(side="left")
+        self.tag_entry.insert(0, tag_initial)
+
+        button_row = ctk.CTkFrame(bs_section, fg_color="transparent")
+        button_row.pack(fill="x", padx=12, pady=(8, 4))
+        ctk.CTkButton(button_row, text="Save", width=120, command=self._on_save_bs_api).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(button_row, text="Test connection", width=160, command=self._on_test_bs_api).pack(side="left")
+
+        self.bs_status_label = ctk.CTkLabel(bs_section, text="", anchor="w", wraplength=700, justify="left")
+        self.bs_status_label.pack(anchor="w", fill="x", padx=12, pady=(4, 12))
+
+    def _on_save_bs_api(self):
+        # Preserve existing fields (e.g. login key) and only update our two.
+        cfg = dict(load_toml_as_dict("cfg/login.toml"))
+        cfg["bs_api_token"] = self.token_entry.get().strip()
+        cfg["player_tag"] = self.tag_entry.get().strip()
+        save_dict_as_toml(cfg, "cfg/login.toml")
+        self._set_bs_status("Saved.", color="#7ed47a")
+
+    def _on_test_bs_api(self):
+        tag = self.tag_entry.get().strip()
+        # Re-save first so the freshly-typed token is what get_client() reads.
+        self._on_save_bs_api()
+        self._set_bs_status("Testing…", color="#9aa0a6")
+
+        def _worker():
+            try:
+                ok, msg = bs_api.get_client().test_connection(tag)
+            except Exception as e:
+                ok, msg = False, f"unexpected error: {e!r}"
+            self.root.after(0, lambda: self._set_bs_status(msg, color="#7ed47a" if ok else "#e57373"))
+
+        threading.Thread(target=_worker, name="bs-api-test", daemon=True).start()
+
+    def _set_bs_status(self, msg: str, color: str = "#9aa0a6"):
+        self.bs_status_label.configure(text=msg, text_color=color)
 
     # --- Button handlers --------------------------------------------------
 
