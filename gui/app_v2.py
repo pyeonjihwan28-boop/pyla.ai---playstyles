@@ -10,8 +10,7 @@ Bot thread NEVER touches widgets — UI thread polls update_queue via
 root.after() and applies state diffs to the Live tab labels.
 """
 import queue
-import threading
-from typing import Callable, Optional
+from typing import Callable
 
 import customtkinter as ctk
 
