@@ -9,8 +9,10 @@ from typing import List
 import scrcpy
 from adbutils import adb
 
-from utils import load_toml_as_dict
 from logger import log
+from config import get_settings
+
+_settings = get_settings()
 
 
 def _port_open(host: str, port: int, timeout: float = 0.3) -> bool:
@@ -42,7 +44,7 @@ directions_xy_deltas_dict = {
     "d": (150, 0),
 }
 
-BRAWL_STARS_PACKAGE = load_toml_as_dict("cfg/general_config.toml")["brawl_stars_package"]
+BRAWL_STARS_PACKAGE = _settings.general.brawl_stars_package
 
 
 class WindowController:
@@ -60,7 +62,7 @@ class WindowController:
             # but adbutils is usually smarter at finding the open device.
             device_list = adb.device_list()
             if not device_list:
-                candidate_ports = [load_toml_as_dict("cfg/general_config.toml")["emulator_port"], 5555, 16384, 5635] + list(range(5565, 5756, 10))
+                candidate_ports = [_settings.general.emulator_port, 5555, 16384, 5635] + list(range(5565, 5756, 10))
                 for port in candidate_ports:
                     if not _port_open("127.0.0.1", port):
                         continue
@@ -102,7 +104,7 @@ class WindowController:
         self.are_we_moving = False
         self.PID_JOYSTICK = 1  # ID for WASD movement
         self.PID_ATTACK = 2  # ID for clicks/attacks
-        self.check_if_brawl_stars_crashed_timer = load_toml_as_dict("cfg/time_tresholds.toml")["check_if_brawl_stars_crashed"]
+        self.check_if_brawl_stars_crashed_timer = _settings.time_tresholds.check_if_brawl_stars_crashed
         self.time_since_checked_if_brawl_stars_crashed = time.time()
 
     def get_latest_frame(self):

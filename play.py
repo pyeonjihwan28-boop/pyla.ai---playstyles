@@ -5,34 +5,35 @@ import time
 import cv2
 from state_finder import get_state
 from detect import Detect
-from utils import load_toml_as_dict, count_hsv_pixels, load_brawlers_info
+from utils import count_hsv_pixels, load_brawlers_info
 from logger import log
+from config import get_settings
 
+_settings = get_settings()
 brawl_stars_width, brawl_stars_height = 1920, 1080
-debug = load_toml_as_dict("cfg/general_config.toml")['super_debug'] == "yes"
-super_crop_area = load_toml_as_dict("./cfg/lobby_config.toml")['pixel_counter_crop_area']['super']
-gadget_crop_area = load_toml_as_dict("./cfg/lobby_config.toml")['pixel_counter_crop_area']['gadget']
-hypercharge_crop_area = load_toml_as_dict("./cfg/lobby_config.toml")['pixel_counter_crop_area']['hypercharge']
+debug = _settings.general.super_debug == "yes"
+super_crop_area = _settings.lobby.pixel_counter_crop_area['super']
+gadget_crop_area = _settings.lobby.pixel_counter_crop_area['gadget']
+hypercharge_crop_area = _settings.lobby.pixel_counter_crop_area['hypercharge']
 
 class Movement:
 
     def __init__(self, window_controller):
-        bot_config = load_toml_as_dict("cfg/bot_config.toml")
-        time_config = load_toml_as_dict("cfg/time_tresholds.toml")
+        bot = _settings.bot
+        time_cfg = _settings.time_tresholds
         self.fix_movement_keys = {
-            "delay_to_trigger": bot_config["unstuck_movement_delay"],
-            "duration": bot_config["unstuck_movement_hold_time"],
+            "delay_to_trigger": bot.unstuck_movement_delay,
+            "duration": bot.unstuck_movement_hold_time,
             "toggled": False,
             "started_at": time.time(),
             "fixed": ""
         }
-        self.game_mode = bot_config["gamemode_type"]
-        gadget_value = bot_config["bot_uses_gadgets"]
-        self.should_use_gadget = str(gadget_value).lower() in ("yes", "true", "1")
-        self.super_treshold = time_config["super"]
-        self.gadget_treshold = time_config["gadget"]
-        self.hypercharge_treshold = time_config["hypercharge"]
-        self.walls_treshold = time_config["wall_detection"]
+        self.game_mode = bot.gamemode_type
+        self.should_use_gadget = str(bot.bot_uses_gadgets).lower() in ("yes", "true", "1")
+        self.super_treshold = time_cfg.super
+        self.gadget_treshold = time_cfg.gadget
+        self.hypercharge_treshold = time_cfg.hypercharge
+        self.walls_treshold = time_cfg.wall_detection
         self.keep_walls_in_memory = self.walls_treshold <= 1
         self.last_walls_data = []
         self.keys_hold = []
@@ -142,11 +143,11 @@ class Play(Movement):
     def __init__(self, main_info_model, tile_detector_model, window_controller):
         super().__init__(window_controller)
 
-        bot_config = load_toml_as_dict("cfg/bot_config.toml")
-        time_config = load_toml_as_dict("cfg/time_tresholds.toml")
+        bot = _settings.bot
+        time_cfg = _settings.time_tresholds
 
         self.Detect_main_info = Detect(main_info_model, classes=['enemy', 'teammate', 'player'])
-        self.tile_detector_model_classes = bot_config["wall_model_classes"]
+        self.tile_detector_model_classes = bot.wall_model_classes
         self.Detect_tile_detector = Detect(
             tile_detector_model,
             classes=self.tile_detector_model_classes
@@ -181,16 +182,16 @@ class Play(Movement):
         # boundary via on_match_start.
         self._walls_locked = False
         self.scene_data = []
-        self.should_detect_walls = bot_config["gamemode"] in ["brawlball", "brawl_ball", "brawll ball"]
-        self.minimum_movement_delay = bot_config["minimum_movement_delay"]
-        self.no_detection_proceed_delay = time_config["no_detection_proceed"]
-        self.gadget_pixels_minimum = bot_config["gadget_pixels_minimum"]
-        self.hypercharge_pixels_minimum = bot_config["hypercharge_pixels_minimum"]
-        self.super_pixels_minimum = bot_config["super_pixels_minimum"]
-        self.wall_detection_confidence = bot_config["wall_detection_confidence"]
-        self.entity_detection_confidence = bot_config["entity_detection_confidence"]
+        self.should_detect_walls = bot.gamemode in ["brawlball", "brawl_ball", "brawll ball"]
+        self.minimum_movement_delay = bot.minimum_movement_delay
+        self.no_detection_proceed_delay = time_cfg.no_detection_proceed
+        self.gadget_pixels_minimum = bot.gadget_pixels_minimum
+        self.hypercharge_pixels_minimum = bot.hypercharge_pixels_minimum
+        self.super_pixels_minimum = bot.super_pixels_minimum
+        self.wall_detection_confidence = bot.wall_detection_confidence
+        self.entity_detection_confidence = bot.entity_detection_confidence
         self.time_since_holding_attack = None
-        self.seconds_to_hold_attack_after_reaching_max = load_toml_as_dict("cfg/bot_config.toml")["seconds_to_hold_attack_after_reaching_max"]
+        self.seconds_to_hold_attack_after_reaching_max = bot.seconds_to_hold_attack_after_reaching_max
 
     def load_brawler_ranges(self, brawlers_info=None):
         if not brawlers_info:

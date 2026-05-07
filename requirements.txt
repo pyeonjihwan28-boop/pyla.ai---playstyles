@@ -11,6 +11,7 @@ pillow~=11.2.1
 discord.py
 shapely~=2.1.1
 packaging~=25.0
+pydantic>=2.0
 pywin32
 easyocr~=1.7.2
 scrcpy-client@git+https://github.com/leng-yue/py-scrcpy-client.git@v0.5.0

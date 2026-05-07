@@ -3,10 +3,11 @@ import os
 import cv2
 import numpy as np
 import onnxruntime as ort
-from utils import load_toml_as_dict
 from logger import log
+from config import get_settings
 
-debug = load_toml_as_dict("cfg/general_config.toml")['super_debug'] == "yes"
+_settings = get_settings()
+debug = _settings.general.super_debug == "yes"
 
 def get_optimal_threads(max_limit=4):
     threads = os.cpu_count()
@@ -77,7 +78,7 @@ def _nms_numpy(preds, conf_thres=0.6, iou_thres=0.6):
 
 class Detect:
     def __init__(self, model_path, ignore_classes=None, classes=None, input_size=(640, 640)):
-        self.preferred_device = load_toml_as_dict("cfg/general_config.toml")['cpu_or_gpu']
+        self.preferred_device = _settings.general.cpu_or_gpu
         self.model_path = model_path
         self.classes = classes
         self.ignore_classes = ignore_classes if ignore_classes else []

@@ -11,13 +11,15 @@ from play import Play
 from stage_manager import StageManager
 from state_finder import get_state
 from time_management import TimeManagement
-from utils import load_toml_as_dict, current_wall_model_is_latest, api_base_url
+from utils import current_wall_model_is_latest, api_base_url
 from utils import get_brawler_list, update_missing_brawlers_info, check_version, async_notify_user, \
     update_wall_model_classes, get_latest_wall_model_file, get_latest_version, cprint
 from window_controller import WindowController
 from logger import log
+from config import get_settings
 
-pyla_version = load_toml_as_dict("./cfg/general_config.toml")['pyla_version']
+_settings = get_settings()
+pyla_version = _settings.general.pyla_version
 
 def pyla_main(data):
     class Main:
@@ -37,10 +39,10 @@ def pyla_main(data):
             self.initialize_stage_manager()
             self.state = None
             try:
-                self.max_ips = int(load_toml_as_dict("cfg/general_config.toml")['max_ips'])
+                self.max_ips = int(_settings.general.max_ips)
             except ValueError:
                 self.max_ips = None
-            self.run_for_minutes = int(load_toml_as_dict("cfg/general_config.toml")['run_for_minutes'])
+            self.run_for_minutes = int(_settings.general.run_for_minutes)
             self.start_time = time.time()
             self.time_to_stop = False
             self.in_cooldown = False

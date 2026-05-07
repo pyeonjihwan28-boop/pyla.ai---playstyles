@@ -13,12 +13,13 @@ import requests
 
 from state_finder import get_state, find_game_result
 from trophy_observer import TrophyObserver
-from utils import find_template_center, load_toml_as_dict, async_notify_user, \
-    save_brawler_data
+from utils import find_template_center, async_notify_user, save_brawler_data
+from config import get_settings
 
-user_id = load_toml_as_dict("cfg/general_config.toml")['discord_id']
-debug = load_toml_as_dict("cfg/general_config.toml")['super_debug'] == "yes"
-user_webhook = load_toml_as_dict("cfg/general_config.toml")['personal_webhook']
+_settings = get_settings()
+user_id = _settings.general.discord_id
+debug = _settings.general.super_debug == "yes"
+user_webhook = _settings.general.personal_webhook
 
 
 def notify_user(message_type):
@@ -52,14 +53,14 @@ class StageManager:
 
     def __init__(self, brawlers_data, lobby_automator, window_controller):
         self.Lobby_automation = lobby_automator
-        self.lobby_config = load_toml_as_dict("./cfg/lobby_config.toml")
+        self.lobby_config = _settings.lobby.model_dump()
         self.close_popup_icon = None
         self.brawlers_pick_data = brawlers_data
         brawler_list = [brawler["brawler"] for brawler in brawlers_data]
         self.Trophy_observer = TrophyObserver(brawler_list)
         self.time_since_last_stat_change = time.time()
-        self.long_press_star_drop = load_toml_as_dict("./cfg/general_config.toml")["long_press_star_drop"]
-        self.play_again_on_win = load_toml_as_dict("./cfg/bot_config.toml")["play_again_on_win"] == "yes"
+        self.long_press_star_drop = _settings.general.long_press_star_drop
+        self.play_again_on_win = _settings.bot.play_again_on_win == "yes"
         self.window_controller = window_controller
         self.states = {
             'shop': self.quit_shop,

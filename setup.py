@@ -74,7 +74,8 @@ install_requires = [
     "typing-extensions>=4.7.0",
     "numpy<2",
     "ninja",
-    "aiohttp>=3.9.0"
+    "aiohttp>=3.9.0",
+    "pydantic>=2.0"
 ]
 
 setup(

@@ -2,9 +2,10 @@ import os
 import sys
 import cv2
 sys.path.append(os.path.abspath('/'))
-from utils import load_toml_as_dict
 from logger import log
+from config import get_settings
 
+_settings = get_settings()
 orig_screen_width, orig_screen_height = 1920, 1080
 
 states_path = r"./images/states/"
@@ -17,8 +18,8 @@ for file in os.listdir(star_drops_path):
 
 end_results_path = r"./images/end_results/"
 
-region_data = load_toml_as_dict("./cfg/lobby_config.toml")['template_matching']
-super_debug = load_toml_as_dict("./cfg/general_config.toml")['super_debug'] == "yes"
+region_data = _settings.lobby.template_matching
+super_debug = _settings.general.super_debug == "yes"
 if super_debug:
     debug_folder = "./debug_frames/"
     if not os.path.exists(debug_folder):
@@ -56,7 +57,7 @@ def load_template(image_path):
     cached_templates[image_path] = image
     return image
 
-crop_region = load_toml_as_dict("./cfg/lobby_config.toml")['lobby']['trophy_observer']
+crop_region = _settings.lobby.lobby['trophy_observer']
 def find_game_result(screenshot):
     is_victory = is_template_in_region(screenshot, end_results_path + 'victory.png', crop_region)
     if is_victory:

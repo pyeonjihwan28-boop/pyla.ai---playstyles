@@ -13,9 +13,9 @@ Use as:
 import logging
 import sys
 
-from utils import load_toml_as_dict
+from config import get_settings
 
-_super_debug = load_toml_as_dict("cfg/general_config.toml").get("super_debug") == "yes"
+_super_debug = get_settings().general.super_debug == "yes"
 _level = logging.DEBUG if _super_debug else logging.INFO
 
 _handler = logging.StreamHandler(sys.stderr)
