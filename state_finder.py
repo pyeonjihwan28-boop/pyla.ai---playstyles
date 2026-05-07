@@ -24,6 +24,17 @@ if super_debug:
     if not os.path.exists(debug_folder):
         os.makedirs(debug_folder)
 
+# End-screen icons (victory/defeat/draw) are animated/glowing, so 0.7
+# matched too loosely and produced false transitions out of "match".
+# Tighten those specifically; everything else keeps the historical 0.7.
+DEFAULT_THRESHOLD = 0.7
+TEMPLATE_THRESHOLDS = {
+    'victory.png': 0.85,
+    'defeat.png': 0.85,
+    'draw.png': 0.85,
+}
+
+
 def is_template_in_region(image, template_path, region):
     current_height, current_width = image.shape[:2]
     orig_x, orig_y, orig_width, orig_height = region
@@ -36,7 +47,8 @@ def is_template_in_region(image, template_path, region):
     result = cv2.matchTemplate(cropped_image, loaded_template,
                                cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-    return max_val > 0.7
+    threshold = TEMPLATE_THRESHOLDS.get(os.path.basename(template_path), DEFAULT_THRESHOLD)
+    return max_val > threshold
 
 cached_templates = {}
 
