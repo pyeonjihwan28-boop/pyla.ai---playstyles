@@ -176,6 +176,11 @@ class Play(Movement):
         self.last_movement_time = time.time()
         self.wall_history = []
         self.wall_history_length = 3  # Number of frames to keep walls
+        self.last_walls_data = []
+        # Walls in Brawl Stars are static per match — once wall_history is full
+        # we stop running tileDetector for the rest of the match. Reset on match
+        # boundary via on_match_start.
+        self._walls_locked = False
         self.scene_data = []
         self.should_detect_walls = bot_config["gamemode"] in ["brawlball", "brawl_ball", "brawll ball"]
         self.minimum_movement_delay = bot_config["minimum_movement_delay"]
@@ -527,19 +532,31 @@ class Play(Movement):
 
         return movement
 
+    def on_match_start(self):
+        self._walls_locked = False
+        self.wall_history = []
+        self.last_walls_data = []
+        self.time_since_walls_checked = 0
+
+    def on_match_end(self):
+        self._walls_locked = False
+
     def main(self, frame, brawler, main):
         current_time = time.time()
         data = self.get_main_data(frame)
-        if self.should_detect_walls and current_time - self.time_since_walls_checked > self.walls_treshold:
-
+        if (
+            self.should_detect_walls
+            and not self._walls_locked
+            and current_time - self.time_since_walls_checked > self.walls_treshold
+        ):
             tile_data = self.get_tile_data(frame)
-
             walls = self.process_tile_data(tile_data)
-
             self.time_since_walls_checked = current_time
             self.last_walls_data = walls
             data['wall'] = walls
-        elif self.keep_walls_in_memory:
+            if len(self.wall_history) >= self.wall_history_length:
+                self._walls_locked = True
+        elif self.should_detect_walls or self.keep_walls_in_memory:
             data['wall'] = self.last_walls_data
 
 
