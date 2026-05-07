@@ -115,7 +115,6 @@ class Movement:
         if "".join(self.keys_hold) != movement and movement[::-1] != "".join(self.keys_hold):
             self.time_since_different_movement = current_time
 
-        # print(f"Last change: {self.time_since_different_movement}", f" self.hold: {self.keys_hold}",f" c movement: {movement}")
         if current_time - self.time_since_different_movement > self.fix_movement_keys["delay_to_trigger"]:
             reversed_movement = self.reverse_movement(movement)
 
@@ -133,7 +132,6 @@ class Movement:
             self.fix_movement_keys['fixed'] = reversed_movement
             self.fix_movement_keys['toggled'] = True
             self.fix_movement_keys['started_at'] = current_time
-            #print(f"REVERSED! from {movement} to {reversed_movement}!")
             return reversed_movement
 
         return movement

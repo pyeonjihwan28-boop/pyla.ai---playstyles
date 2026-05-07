@@ -93,7 +93,6 @@ def pyla_main(data):
                         self.restart_brawl_stars()
 
             if self.Time_management.idle_check():
-                #print("check for idle!")
                 self.lobby_automator.check_for_idle(frame)
 
         def main(self): #this is for timer to stop after time
