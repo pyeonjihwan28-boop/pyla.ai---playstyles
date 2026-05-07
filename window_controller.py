@@ -76,6 +76,7 @@ class WindowController:
             print(f"Connected to device: {self.device.serial}")
 
             self.frame_lock = threading.Lock()
+            self.frame_cond = threading.Condition(self.frame_lock)
             self.scrcpy_client = scrcpy.Client(device=self.device, max_width=0)
             self.last_frame = None
             self.last_frame_time = 0.0
@@ -85,9 +86,10 @@ class WindowController:
             def on_frame(frame):
                 if frame is not None:
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    with self.frame_lock:
+                    with self.frame_cond:
                         self.last_frame = frame
                         self.last_frame_time = time.time()
+                        self.frame_cond.notify_all()
 
             self.scrcpy_client.add_listener(scrcpy.EVENT_FRAME, on_frame)
             self.scrcpy_client.start(threaded=True)
@@ -127,18 +129,18 @@ class WindowController:
                 self.time_since_checked_if_brawl_stars_crashed = time.time()
             else:
                 self.time_since_checked_if_brawl_stars_crashed = c_time
-        frame, frame_time = self.get_latest_frame()
-
         deadline = time.time() + 15
-        while frame is None:
-            if time.time() > deadline:
-                raise ConnectionError(
-                    "No frame received from scrcpy within 15s. "
-                    "Check USB/emulator connection."
-                )
-            print("Waiting for first frame...")
-            time.sleep(0.1)
-            frame, frame_time = self.get_latest_frame()
+        with self.frame_cond:
+            while self.last_frame is None:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    raise ConnectionError(
+                        "No frame received from scrcpy within 15s. "
+                        "Check USB/emulator connection."
+                    )
+                self.frame_cond.wait(timeout=remaining)
+            frame = self.last_frame
+            frame_time = self.last_frame_time
 
         age = time.time() - frame_time
         if frame_time > 0 and age > self.FRAME_STALE_TIMEOUT:
