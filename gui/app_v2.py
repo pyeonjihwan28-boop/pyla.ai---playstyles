@@ -27,6 +27,7 @@ from bot_state import (
 from logger import log
 from utils import load_toml_as_dict, save_dict_as_toml
 import bs_api
+import app_state
 
 
 _POLL_INTERVAL_MS = 100
@@ -38,6 +39,8 @@ class TabbedApp:
     def __init__(self, brawlers_data_provider: Callable[[], list], pyla_version: str = ""):
         self.brawlers_data_provider = brawlers_data_provider
         self.controller = BotController()
+        self._roster: list = []
+        self._roster_sort = "trophies"  # 'name' | 'trophies' | 'winstreak'
 
         self.root = ctk.CTk()
         self.root.title(f"PylaAI {pyla_version}")
@@ -62,16 +65,163 @@ class TabbedApp:
 
     def _build_setup_tab(self, parent):
         ctk.CTkLabel(
-            parent, text="Setup",
+            parent, text="Setup — your roster",
             font=("Segoe UI", 22, "bold"),
-        ).pack(anchor="w", padx=20, pady=(20, 6))
-        ctk.CTkLabel(
+        ).pack(anchor="w", padx=20, pady=(20, 4))
+
+        controls = ctk.CTkFrame(parent, fg_color="transparent")
+        controls.pack(fill="x", padx=20, pady=(0, 8))
+        self.refresh_roster_btn = ctk.CTkButton(
+            controls, text="Refresh from API", width=160, command=self._on_refresh_roster
+        )
+        self.refresh_roster_btn.pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(controls, text="Sort:").pack(side="left", padx=(8, 4))
+        self.sort_choice = ctk.CTkOptionMenu(
+            controls,
+            values=["trophies", "name", "winstreak"],
+            width=140,
+            command=self._on_sort_changed,
+        )
+        self.sort_choice.set(self._roster_sort)
+        self.sort_choice.pack(side="left")
+
+        self.roster_status_label = ctk.CTkLabel(parent, text="", anchor="w", text_color="#9aa0a6")
+        self.roster_status_label.pack(anchor="w", padx=20, pady=(0, 4), fill="x")
+
+        # API-disabled banner
+        self.api_disabled_banner = ctk.CTkLabel(
             parent,
-            text=("Configure brawlers, push targets, and wins/trophies here.\n"
-                  "Stage 2 will fetch your roster from the Brawl Stars API.\n"
-                  "For now, use the legacy wizard or import existing data."),
-            justify="left",
-        ).pack(anchor="w", padx=20, pady=(0, 12))
+            text="Configure your API token in the Settings tab before refreshing.",
+            anchor="w",
+            text_color="#e0a93a",
+        )
+        self._refresh_api_disabled_banner()
+
+        self.roster_container = ctk.CTkScrollableFrame(parent, height=480)
+        self.roster_container.pack(fill="both", expand=True, padx=20, pady=(4, 12))
+
+    def _refresh_api_disabled_banner(self):
+        token = (load_toml_as_dict("cfg/login.toml").get("bs_api_token") or "").strip()
+        if not token:
+            self.api_disabled_banner.pack(anchor="w", padx=20, pady=(0, 6), fill="x")
+            self.refresh_roster_btn.configure(state="disabled")
+        else:
+            self.api_disabled_banner.pack_forget()
+            self.refresh_roster_btn.configure(state="normal")
+
+    def _on_sort_changed(self, value: str):
+        self._roster_sort = value
+        self._render_roster_rows()
+
+    def _on_refresh_roster(self):
+        login_cfg = load_toml_as_dict("cfg/login.toml")
+        tag = (login_cfg.get("player_tag") or "").strip()
+        if not tag:
+            self._set_roster_status("Set player tag in Settings tab first.", color="#e57373")
+            return
+        self._set_roster_status("Loading…", color="#9aa0a6")
+
+        def _worker():
+            try:
+                brawlers = bs_api.get_client().get_brawlers(tag)
+            except bs_api.BSApiDisabled:
+                self.root.after(0, lambda: self._set_roster_status("API disabled — set token in Settings.", color="#e57373"))
+                return
+            except Exception as e:
+                self.root.after(0, lambda: self._set_roster_status(f"error: {e!r}", color="#e57373"))
+                return
+            self.root.after(0, lambda: self._on_roster_loaded(brawlers))
+
+        threading.Thread(target=_worker, name="roster-refresh", daemon=True).start()
+
+    def _on_roster_loaded(self, brawlers: list):
+        self._roster = brawlers or []
+        self._set_roster_status(f"{len(self._roster)} brawlers loaded.", color="#7ed47a")
+        self._render_roster_rows()
+
+    def _set_roster_status(self, msg: str, color: str = "#9aa0a6"):
+        self.roster_status_label.configure(text=msg, text_color=color)
+
+    def _sorted_roster(self):
+        if self._roster_sort == "name":
+            return sorted(self._roster, key=lambda b: b.get("name", ""))
+        if self._roster_sort == "winstreak":
+            return sorted(self._roster, key=lambda b: -b.get("currentWinStreak", 0))
+        return sorted(self._roster, key=lambda b: -b.get("trophies", 0))
+
+    def _render_roster_rows(self):
+        for child in self.roster_container.winfo_children():
+            child.destroy()
+        for brawler in self._sorted_roster():
+            row = ctk.CTkFrame(self.roster_container)
+            row.pack(fill="x", pady=2)
+            ctk.CTkLabel(row, text=brawler.get("name", "?"), width=180, anchor="w").pack(side="left", padx=8, pady=6)
+            ctk.CTkLabel(row, text=f"{brawler.get('trophies', 0)} 🏆", width=120, anchor="w").pack(side="left", padx=4)
+            ctk.CTkLabel(row, text=f"WS {brawler.get('currentWinStreak', 0)}", width=80, anchor="w").pack(side="left", padx=4)
+            ctk.CTkLabel(row, text=f"P{brawler.get('power', 0)} R{brawler.get('rank', 0)}", width=90, anchor="w").pack(side="left", padx=4)
+            ctk.CTkButton(
+                row, text="Add to queue ▶", width=140,
+                command=lambda b=brawler: self._open_add_to_queue_dialog(b),
+            ).pack(side="right", padx=8)
+
+    def _open_add_to_queue_dialog(self, brawler: dict):
+        top = ctk.CTkToplevel(self.root)
+        top.title(f"Add {brawler.get('name', '?')} to queue")
+        top.geometry("420x300")
+        top.transient(self.root)
+        top.grab_set()
+
+        ctk.CTkLabel(top, text=f"Brawler: {brawler.get('name', '?')}", font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=16, pady=(16, 6))
+        ctk.CTkLabel(top, text=f"Current trophies: {brawler.get('trophies', 0)} | Win streak: {brawler.get('currentWinStreak', 0)}").pack(anchor="w", padx=16)
+
+        type_var = ctk.StringVar(value="trophies")
+        type_row = ctk.CTkFrame(top, fg_color="transparent")
+        type_row.pack(fill="x", padx=16, pady=(12, 4))
+        ctk.CTkLabel(type_row, text="Target type:", width=110, anchor="w").pack(side="left")
+        ctk.CTkRadioButton(type_row, text="Trophies", variable=type_var, value="trophies").pack(side="left", padx=(0, 12))
+        ctk.CTkRadioButton(type_row, text="Wins", variable=type_var, value="wins").pack(side="left")
+
+        target_default = brawler.get("trophies", 0) + 100
+        target_row = ctk.CTkFrame(top, fg_color="transparent")
+        target_row.pack(fill="x", padx=16, pady=4)
+        ctk.CTkLabel(target_row, text="Target value:", width=110, anchor="w").pack(side="left")
+        target_entry = ctk.CTkEntry(target_row, width=140)
+        target_entry.insert(0, str(target_default))
+        target_entry.pack(side="left")
+
+        auto_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(top, text="Auto-pick this brawler when its turn comes", variable=auto_var).pack(anchor="w", padx=16, pady=(12, 4))
+
+        button_row = ctk.CTkFrame(top, fg_color="transparent")
+        button_row.pack(fill="x", padx=16, pady=(12, 16))
+
+        def _confirm():
+            try:
+                target_value = int(target_entry.get().strip())
+            except ValueError:
+                target_value = target_default
+            entry = app_state.QueueEntry(
+                brawler_name=brawler.get("name", "?"),
+                target_type=type_var.get(),
+                target_value=target_value,
+                current_trophies=int(brawler.get("trophies", 0)),
+                current_wins=0,
+                win_streak=int(brawler.get("currentWinStreak", 0)),
+                automatically_pick=bool(auto_var.get()),
+            )
+            existing = app_state.load_queue()
+            existing.append(entry)
+            app_state.save_queue(existing)
+            self._set_roster_status(f"Added {entry.brawler_name} to queue.", color="#7ed47a")
+            self._refresh_queue_rows()
+            top.destroy()
+
+        ctk.CTkButton(button_row, text="Add", command=_confirm, width=120).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(button_row, text="Cancel", command=top.destroy, width=120).pack(side="left")
+
+    def _refresh_queue_rows(self):
+        # Filled in by US-003. For now, no-op so callers don't break.
+        return
 
     def _build_queue_tab(self, parent):
         ctk.CTkLabel(
