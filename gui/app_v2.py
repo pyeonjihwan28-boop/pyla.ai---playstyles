@@ -220,19 +220,85 @@ class TabbedApp:
         ctk.CTkButton(button_row, text="Cancel", command=top.destroy, width=120).pack(side="left")
 
     def _refresh_queue_rows(self):
-        # Filled in by US-003. For now, no-op so callers don't break.
-        return
+        if not hasattr(self, "queue_container"):
+            return  # called before Queue tab built
+        for child in self.queue_container.winfo_children():
+            child.destroy()
+        entries = app_state.load_queue()
+        if not entries:
+            ctk.CTkLabel(
+                self.queue_container,
+                text="Queue is empty. Add brawlers from the Setup tab.",
+                text_color="#9aa0a6",
+            ).pack(anchor="w", pady=8, padx=8)
+            self.queue_status_label.configure(text="0 entries")
+            return
+        for idx, entry in enumerate(entries):
+            row = ctk.CTkFrame(self.queue_container)
+            row.pack(fill="x", pady=2)
+            ctk.CTkLabel(row, text=f"#{idx + 1}", width=40).pack(side="left", padx=(8, 4), pady=6)
+            ctk.CTkLabel(row, text=entry.brawler_name, width=170, anchor="w", font=("Segoe UI", 13, "bold")).pack(side="left")
+            current = entry.current_trophies if entry.target_type == "trophies" else entry.current_wins
+            ctk.CTkLabel(row, text=f"{current} → {entry.target_value} {entry.target_type}", width=220, anchor="w").pack(side="left", padx=8)
+            ctk.CTkLabel(row, text=f"WS {entry.win_streak}", width=70, anchor="w").pack(side="left")
+            ctk.CTkLabel(row, text="auto" if entry.automatically_pick else "manual", width=70, anchor="w", text_color="#9aa0a6").pack(side="left")
+
+            ctk.CTkButton(row, text="↑", width=36, command=lambda i=idx: self._queue_move(i, -1)).pack(side="right", padx=2)
+            ctk.CTkButton(row, text="↓", width=36, command=lambda i=idx: self._queue_move(i, 1)).pack(side="right", padx=2)
+            ctk.CTkButton(row, text="Remove", width=80, fg_color="#a04040",
+                          command=lambda i=idx: self._queue_remove(i)).pack(side="right", padx=(8, 4))
+        self.queue_status_label.configure(text=f"{len(entries)} entries")
+
+    def _queue_move(self, idx: int, delta: int):
+        entries = app_state.load_queue()
+        new_idx = idx + delta
+        if not (0 <= new_idx < len(entries)):
+            return
+        entries[idx], entries[new_idx] = entries[new_idx], entries[idx]
+        app_state.save_queue(entries)
+        self._refresh_queue_rows()
+
+    def _queue_remove(self, idx: int):
+        entries = app_state.load_queue()
+        if 0 <= idx < len(entries):
+            entries.pop(idx)
+            app_state.save_queue(entries)
+            self._refresh_queue_rows()
+
+    def _on_clear_queue(self):
+        # Simple inline confirmation via the status label — avoids spawning
+        # an extra dialog. Two-step: first click flags pending, second click
+        # within 5s commits the clear.
+        import time as _time
+        now = _time.time()
+        if getattr(self, "_clear_pending_at", 0) and now - self._clear_pending_at < 5:
+            app_state.save_queue([])
+            self._clear_pending_at = 0
+            self._refresh_queue_rows()
+            self.queue_status_label.configure(text="Cleared.")
+            return
+        self._clear_pending_at = now
+        self.queue_status_label.configure(text="Click 'Clear all' again within 5s to confirm.", text_color="#e0a93a")
 
     def _build_queue_tab(self, parent):
         ctk.CTkLabel(
             parent, text="Push queue",
             font=("Segoe UI", 22, "bold"),
-        ).pack(anchor="w", padx=20, pady=(20, 6))
-        ctk.CTkLabel(
-            parent,
-            text="Stage 3: ordered list of brawlers to push, with reorder/add/remove.",
-            justify="left",
-        ).pack(anchor="w", padx=20, pady=(0, 12))
+        ).pack(anchor="w", padx=20, pady=(20, 4))
+
+        controls = ctk.CTkFrame(parent, fg_color="transparent")
+        controls.pack(fill="x", padx=20, pady=(0, 8))
+        ctk.CTkButton(controls, text="Refresh", width=100, command=self._refresh_queue_rows).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            controls, text="Clear all", width=100, fg_color="#a04040",
+            command=self._on_clear_queue,
+        ).pack(side="left")
+        self.queue_status_label = ctk.CTkLabel(controls, text="", anchor="w", text_color="#9aa0a6")
+        self.queue_status_label.pack(side="left", padx=12)
+
+        self.queue_container = ctk.CTkScrollableFrame(parent, height=520)
+        self.queue_container.pack(fill="both", expand=True, padx=20, pady=(4, 12))
+        self._refresh_queue_rows()
 
     def _build_live_tab(self, parent):
         header = ctk.CTkLabel(parent, text="Live", font=("Segoe UI", 22, "bold"))
