@@ -10,7 +10,7 @@ debug = load_toml_as_dict("cfg/general_config.toml")['super_debug'] == "yes"
 def get_optimal_threads(max_limit=4):
     threads = os.cpu_count()
     threads_amount = min(max(2, threads // 2), max_limit)
-    if True: print(f"Detected {threads} CPU threads, using {threads_amount} threads.")
+    print(f"Detected {threads} CPU threads, using {threads_amount} threads.")
     return threads_amount
 
 optimal_threads_amount = get_optimal_threads()

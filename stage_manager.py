@@ -62,7 +62,6 @@ class StageManager:
             'shop': self.quit_shop,
             'brawler_selection': self.quit_shop,
             'popup': self.close_pop_up,
-            'match': lambda: 0,
             'end_draw': self.end_game,
             'end_victory': self.end_game,
             'end_defeat': self.end_game,
@@ -264,8 +263,11 @@ class StageManager:
             self.window_controller.click(*popup_location)
 
     def do_state(self, state, data=None):
-        if data is not None:
-            self.states[state](data)
+        handler = self.states.get(state)
+        if handler is None:
             return
-        self.states[state]()
+        if data is not None:
+            handler(data)
+            return
+        handler()
 

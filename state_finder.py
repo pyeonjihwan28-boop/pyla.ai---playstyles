@@ -31,7 +31,6 @@ def is_template_in_region(image, template_path, region):
     new_x, new_y = int(orig_x * width_ratio), int(orig_y * height_ratio)
     new_width, new_height = int(orig_width * width_ratio), int(orig_height * height_ratio)
     cropped_image = image[new_y:new_y + new_height, new_x:new_x + new_width]
-    current_height, current_width = image.shape[:2]
     loaded_template = load_template(template_path, current_width, current_height)
     result = cv2.matchTemplate(cropped_image, loaded_template,
                                cv2.TM_CCOEFF_NORMED)
