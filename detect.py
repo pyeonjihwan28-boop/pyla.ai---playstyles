@@ -74,6 +74,7 @@ class Detect:
 
         resized_img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
 
+        self._padded_img_buffer.fill(128.0 / 255.0)
         self._padded_img_buffer[0, :, :new_h, :new_w] = np.transpose(resized_img, (2, 0, 1)).astype(np.float32) / 255.0
 
         return self._padded_img_buffer, new_w, new_h
