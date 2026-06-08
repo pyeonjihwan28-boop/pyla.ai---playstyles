@@ -6,7 +6,18 @@ import shutil
 import glob
 import importlib
 
+# --- GIT CHECK ---
+if not any(arg in sys.argv for arg in ["--help", "-h", "--version", "clean"]):
+    if not shutil.which("git"):
+        print("\n" + "!" * 80)
+        print(" ERROR: 'git' command not found in your PATH.")
+        print(" PylaAI requires Git to install dependencies (e.g. scrcpy-client).")
+        print(" Please install Git from https://git-scm.com/ and add it to your PATH.")
+        print("!" * 80 + "\n")
+        sys.exit(1)
+
 # --- LOOP-PROOF BOOTSTRAP ---
+
 def bootstrap():
     if os.environ.get("PYLAAI_BOOTSTRAP") == "1":
         return
@@ -53,7 +64,8 @@ def get_requirement_name(req):
 
 def check_base_requirements(req_list):
     print("\nVerifying base requirements...")
-    for req in req_list:
+    # Check scrcpy-client manually to avoid build-time dependency resolution conflicts
+    for req in req_list + ["scrcpy-client"]:
         pkg_name = get_requirement_name(req)
         mapping = {
             "opencv_python": "cv2",
@@ -64,7 +76,7 @@ def check_base_requirements(req_list):
             "onnxruntime_directml": "onnxruntime",
             "pycryptodome": "Crypto",
             "flask": "flask",
-            "pywebview": "webview",
+            "pandas": "pandas",
         }
         import_name = mapping.get(pkg_name, pkg_name)
 
@@ -92,26 +104,23 @@ def ask_user(prompt_text):
 
 # --- MAIN SETUP ---
 install_requires = [
-    "aiohttp~=3.12.13",
+    "aiohttp~=3.13.5",
     "opencv-python~=4.11.0.86",
     "numpy~=2.3.0",
-    "onnxruntime-directml",
+    "onnxruntime-directml~=1.24.3",
     "requests~=2.32.4",
     "toml~=0.10.2",
-    "torch",
-    "discord.py",
+    "torch~=2.8.0",
+    "pillow~=11.2.1",
+    "discord.py~=2.7.1",
     "packaging~=25.0",
-    "pywin32",
+    "pywin32==311",
     "easyocr~=1.7.2",
-    "scrcpy-client @ git+https://github.com/leng-yue/py-scrcpy-client.git@v0.5.0",
     "adbutils~=2.12.0",
     "av~=12.3.0",
-    "fastapi~=0.115.0",
-    "uvicorn[standard]~=0.34.0",
-    "websockets~=14.2",
-    "pycryptodome~=3.21.0",
     "Flask~=3.1.0",
-    "pywebview~=6.2.1",
+    "pycryptodome~=3.21.0",
+    "pandas~=3.0.3",
 ]
 
 setup(
