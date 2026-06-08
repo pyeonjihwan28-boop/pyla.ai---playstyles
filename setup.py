@@ -6,6 +6,7 @@ import shutil
 import glob
 import importlib
 
+# --- LOOP-PROOF BOOTSTRAP ---
 def bootstrap():
     if os.environ.get("PYLAAI_BOOTSTRAP") == "1":
         return
@@ -18,7 +19,7 @@ def bootstrap():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
         print("Environment stabilized. Restarting setup...\n")
         subprocess.run([sys.executable] + sys.argv)
-        sys.exit(0) 
+        sys.exit(0)
 
 if any(cmd in sys.argv for cmd in ["install", "develop"]):
     bootstrap()
@@ -35,12 +36,38 @@ def check_pytorch_status():
     except ImportError:
         return "missing", None
 
+def get_requirement_name(req):
+    req = req.strip()
+
+    if " @ " in req:
+        name = req.split(" @ ", 1)[0].strip()
+    elif "@git+" in req:
+        name = req.split("@git+", 1)[0].strip()
+    else:
+        name = req
+        for sep in ["~=", ">=", "<=", "==", "!=", ">", "<"]:
+            name = name.split(sep, 1)[0]
+
+    name = name.split("[", 1)[0].strip()
+    return name.replace("-", "_").lower()
+
 def check_base_requirements(req_list):
     print("\nVerifying base requirements...")
     for req in req_list:
-        pkg_name = req.split('>=')[0].split('<')[0].split('==')[0].strip().replace('-', '_')
-        mapping = {"opencv_python": "cv2", "discord.py": "discord", "Pillow": "PIL"}
+        pkg_name = get_requirement_name(req)
+        mapping = {
+            "opencv_python": "cv2",
+            "discord.py": "discord",
+            "pillow": "PIL",
+            "pywin32": "win32api",
+            "scrcpy_client": "scrcpy",
+            "onnxruntime_directml": "onnxruntime",
+            "pycryptodome": "Crypto",
+            "flask": "flask",
+            "pywebview": "webview",
+        }
         import_name = mapping.get(pkg_name, pkg_name)
+
         try:
             importlib.import_module(import_name)
             print(f"  [OK] {req}")
@@ -50,7 +77,9 @@ def check_base_requirements(req_list):
 def get_gpu_info():
     try:
         output = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader,nounits"], encoding='utf-8')
+            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader,nounits"],
+            encoding='utf-8'
+        )
         cc = float(output.strip().split('\n')[0])
         return "nvidia", cc
     except:
@@ -61,41 +90,48 @@ def ask_user(prompt_text):
     response = sys.stdin.readline().strip().lower()
     return response in ['y', 'yes']
 
-# --- MAIN requires ---
+# --- MAIN SETUP ---
 install_requires = [
-    "customtkinter>=5.2.0",
-    "toml>=0.10.2",
-    "Pillow>=10.0.0",
-    "discord.py>=2.3.2",
-    "opencv-python>=4.8.0,<4.10.0", 
-    "requests>=2.31.0",
-    "packaging>=23.1",
-    "pyautogui>=0.9.54",
-    "typing-extensions>=4.7.0",
-    "ultralytics>=8.0.0",
-    "numpy<2",
-    "ninja",
-    "aiohttp>=3.9.0"
+    "aiohttp~=3.12.13",
+    "opencv-python~=4.11.0.86",
+    "numpy~=2.3.0",
+    "onnxruntime-directml",
+    "requests~=2.32.4",
+    "toml~=0.10.2",
+    "torch",
+    "discord.py",
+    "packaging~=25.0",
+    "pywin32",
+    "easyocr~=1.7.2",
+    "scrcpy-client @ git+https://github.com/leng-yue/py-scrcpy-client.git@v0.5.0",
+    "adbutils~=2.12.0",
+    "av~=12.3.0",
+    "fastapi~=0.115.0",
+    "uvicorn[standard]~=0.34.0",
+    "websockets~=14.2",
+    "pycryptodome~=3.21.0",
+    "Flask~=3.1.0",
+    "pywebview~=6.2.1",
 ]
 
 setup(
     name="PylaAI",
     version="1.0.0",
-    packages=find_packages(exclude=["api", "cfg", "images", "models", "tests", "typization"]),
+    packages=find_packages(exclude=["api", "cfg", "images", "models"]),
     install_requires=install_requires,
 )
 
 if any(cmd in sys.argv for cmd in ["install", "develop"]):
     try:
         check_base_requirements(install_requires)
-        
-        # --- PYTORCH CHECK ---
+
+        # --- SMART PYTORCH CHECK ---
         status, version = check_pytorch_status()
         gpu_type, cc = get_gpu_info()
-        
+
         installed_pytorch = f"{status.upper()} Edition ({version})" if version else "Installing..."
         installed_cuda = "N/A"
-        
+
         # Logic for NVIDIA users
         if gpu_type == "nvidia":
             if status == "cuda":
@@ -105,22 +141,34 @@ if any(cmd in sys.argv for cmd in ["install", "develop"]):
                 print(f"\nNVIDIA GPU detected (CC: {cc})")
                 if ask_user("Do you want to install/upgrade to PyTorch FULL (CUDA Support)?"):
                     if cc >= 12.0 or cc == 10.0:
-                        subprocess.check_call([sys.executable, "-m", "pip", "install", "--pre", "torch", "torchvision", "torchaudio", "--index-url", "https://download.pytorch.org/whl/nightly/cu128"])
+                        subprocess.check_call([
+                            sys.executable, "-m", "pip", "install", "--pre",
+                            "torch", "torchvision", "torchaudio",
+                            "--index-url", "https://download.pytorch.org/whl/nightly/cu128"
+                        ])
                         installed_pytorch = "PyTorch (Nightly Full)"
                         installed_cuda = "12.8"
                     elif cc >= 8.9:
-                        subprocess.check_call([sys.executable, "-m", "pip", "install", "torch", "torchvision", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cu124"])
+                        subprocess.check_call([
+                            sys.executable, "-m", "pip", "install",
+                            "torch", "torchvision", "torchaudio",
+                            "--index-url", "https://download.pytorch.org/whl/cu124"
+                        ])
                         installed_pytorch = "PyTorch (Stable Full)"
                         installed_cuda = "12.4"
                     else:
-                        subprocess.check_call([sys.executable, "-m", "pip", "install", "torch", "torchvision", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cu118"])
+                        subprocess.check_call([
+                            sys.executable, "-m", "pip", "install",
+                            "torch", "torchvision", "torchaudio",
+                            "--index-url", "https://download.pytorch.org/whl/cu118"
+                        ])
                         installed_pytorch = "PyTorch (Stable Full)"
                         installed_cuda = "11.8"
                 elif status == "missing":
-                    print("Installing PyTorch CPU Edition...")
+                    print("Installing mandatory PyTorch CPU Edition...")
                     subprocess.check_call([sys.executable, "-m", "pip", "install", "torch", "torchvision"])
                     installed_pytorch = "PyTorch (Standard CPU)"
-            
+
             subprocess.check_call([sys.executable, "-m", "pip", "install", "onnxruntime-gpu"])
             installed_onnx = "ONNX Runtime (GPU)"
 
@@ -132,18 +180,27 @@ if any(cmd in sys.argv for cmd in ["install", "develop"]):
                 print("\nInstalling mandatory PyTorch CPU...")
                 subprocess.check_call([sys.executable, "-m", "pip", "install", "torch", "torchvision"])
                 installed_pytorch = "PyTorch (Standard CPU)"
-            
+
             subprocess.check_call([sys.executable, "-m", "pip", "install", "onnxruntime-directml"])
             installed_onnx = "ONNX Runtime (DirectML)"
 
         # Conflict Resolution
         subprocess.check_call([sys.executable, "-m", "pip", "install", "adbutils==2.12.0", "av==12.3.0"])
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--force-reinstall", "--no-deps", "git+https://github.com/leng-yue/py-scrcpy-client.git@v0.5.0"])
-        
+        subprocess.check_call([
+            sys.executable, "-m", "pip", "install",
+            "--force-reinstall", "--no-deps",
+            "git+https://github.com/leng-yue/py-scrcpy-client.git@v0.5.0"
+        ])
+
         os.system('cls' if os.name == 'nt' else 'clear')
         print("\n" + "="*50 + "\n              SETUP COMPLETED!                \n" + "="*50)
-        print(f"  - PyTorch:          {installed_pytorch}\n  - CUDA Status:      {installed_cuda}\n  - ONNX Engine:      {installed_onnx}\n" + "="*50 + "\n")
-        
+        print(
+            f"  - PyTorch:          {installed_pytorch}\n"
+            f"  - CUDA Status:      {installed_cuda}\n"
+            f"  - ONNX Engine:      {installed_onnx}\n"
+            + "="*50 + "\n"
+        )
+
     except Exception as e:
         print(f"\n[ERROR] {e}")
         sys.exit(1)
