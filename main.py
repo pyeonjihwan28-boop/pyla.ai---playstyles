@@ -230,8 +230,6 @@ def pyla_main(discord_bot, queue_data, stop_event=None, runtime_control=None):
                     if self.sleep_interruptible(0.25, allow_pause=False) == "stop":
                         return
                     continue
-                if state != "lobby":
-                    return
                 if self.sleep_interruptible(0.75, allow_pause=False) == "stop":
                     return
 
