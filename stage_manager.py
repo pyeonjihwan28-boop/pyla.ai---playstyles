@@ -3,7 +3,7 @@ import time
 import cv2
 
 from state_finder import get_state
-from trophy_observer import TrophyObserver
+from trophy_observer import TrophyObserver, MatchResult
 from utils import find_template_center, load_toml_as_dict, notify_user, save_brawler_data
 
 try:
@@ -221,11 +221,15 @@ class StageManager:
         while current_state.startswith("end") and time.time() - end_screen_time < 35:
 
             if time.time() - self.time_since_last_stat_change > 25:
-                found_game_result = '_'.join(current_state.split("_")[1:])
+                raw_found_result = '_'.join(current_state.split("_")[1:])
+                parsed_result = self.Trophy_observer.parse_game_result(raw_found_result)
+                
                 current_brawler = self.brawlers_pick_data[0]['brawler']
                 power_level = None if not early_access else get_brawler_stats(get_player_info(self.player_tag), current_brawler, power_level=True)[2]
-                self.Trophy_observer.add_trophies(found_game_result, current_brawler, self.playstyle_info, power_level)
-                self.Trophy_observer.add_win(found_game_result)
+                
+                self.Trophy_observer.add_trophies(parsed_result, current_brawler, self.playstyle_info, power_level)
+                self.Trophy_observer.add_win(parsed_result)
+                
                 self.time_since_last_stat_change = time.time()
                 values = {
                     "trophies": self.Trophy_observer.current_trophies,
@@ -237,7 +241,7 @@ class StageManager:
                 self.brawlers_pick_data[0]['win_streak'] = self.Trophy_observer.win_streak
                 save_brawler_data(self.brawlers_pick_data)
 
-            if not button_pressed and self.play_again_on_win and found_game_result == "victory" and not self._should_pause() and not self._should_stop():
+            if not button_pressed and self.play_again_on_win and parsed_result.result == MatchResult.VICTORY and not self._should_pause() and not self._should_stop():
                 self.window_controller.press("play_again")
                 button_pressed = True
             else:

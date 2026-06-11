@@ -2,7 +2,26 @@ import os
 import requests
 from utils import load_toml_as_dict, save_dict_as_toml, api_base_url, hash_playstyle, PYLA_VERSION
 import pandas as pd
+from enum import Enum
+from dataclasses import dataclass
+from typing import Optional
 from datetime import datetime
+
+class GameMode(Enum):
+    CLASSIC = "classic"
+    TRIO_SHOWDOWN = "trio_showdown"
+
+class MatchResult(Enum):
+    VICTORY = "victory"
+    DRAW = "draw"
+    DEFEAT = "defeat"
+
+@dataclass
+class ParsedGameResult:
+    gamemode: GameMode
+    result: MatchResult
+    place: Optional[int] = None
+    raw_string: str = ""
 
 class TrophyObserver:
 
@@ -70,47 +89,76 @@ class TrophyObserver:
 
     def save_history(self):
         self.match_history.to_csv(self.history_file, index=False)
-
-    def add_trophies(self, game_result, current_brawler, playstyle_info, power_level=None):
-        print(f"Found game result!: {game_result} win streak: {self.win_streak}")
-        old = self.current_trophies
-        if game_result == "victory":
-            self.win_streak += 1
-            trophy_delta = self.calc_win_increment()
-        elif game_result == "defeat":
-            self.win_streak = 0
-            trophy_delta = -self.calc_lost_decrement()
-        elif game_result == "draw":
-            print("Nothing changed. Draw detected")
-            trophy_delta = 0
-        elif "showdown" in game_result:
-            place = int(game_result.split("_")[-1])
+    
+    @staticmethod
+    def parse_game_result(raw_result: str) -> ParsedGameResult:
+        """Parses raw game result string into a structured data class."""
+        print(f"Found game result: {raw_result}")
+        if "showdown" in raw_result:
+            place = int(raw_result.split("_")[-1])
+            gamemode = GameMode.TRIO_SHOWDOWN if "trio_showdown" in raw_result else GameMode.CLASSIC
+            
             if place < 2:
-                game_result = "victory"
-                self.win_streak += 1
+                result = MatchResult.VICTORY
             elif place == 2:
-                game_result = "draw"
+                result = MatchResult.DRAW
             else:
-                game_result = "defeat"
-                self.win_streak = 0
-            trophy_delta = self.calc_showdown_delta(place)
+                result = MatchResult.DEFEAT
+                
+            return ParsedGameResult(gamemode=gamemode, result=result, place=place, raw_string=raw_result)
+        else:
+            result_map = {
+                "victory": MatchResult.VICTORY,
+                "draw": MatchResult.DRAW,
+                "defeat": MatchResult.DEFEAT
+            }
+            return ParsedGameResult(
+                gamemode=GameMode.CLASSIC,
+                result=result_map.get(raw_result, MatchResult.DEFEAT),
+                place=None,
+                raw_string=raw_result
+            )
+
+    def add_trophies(self, parsed_result: ParsedGameResult, current_brawler, playstyle_info, power_level=None):
+        old_trophies = self.current_trophies
+        old_win_streak = self.win_streak
+
+        if parsed_result.result == MatchResult.VICTORY:
+            self.win_streak += 1
+            if parsed_result.place is not None:
+                trophy_delta = self.calc_showdown_delta(parsed_result.place)
+            else:
+                trophy_delta = self.calc_win_increment()
+        elif parsed_result.result == MatchResult.DEFEAT:
+            self.win_streak = 0
+            if parsed_result.place is not None:
+                trophy_delta = self.calc_showdown_delta(parsed_result.place)
+            else:
+                trophy_delta = -self.calc_lost_decrement()
+        elif parsed_result.result == MatchResult.DRAW:
+            if parsed_result.place is not None:
+                trophy_delta = self.calc_showdown_delta(parsed_result.place)
+            else:
+                print("Nothing changed. Draw detected")
+                trophy_delta = 0
         else:
             print("Catastrophic failure")
             trophy_delta = 0
+        
         self.current_trophies += trophy_delta
 
-        print(f"Trophies : {old} -> {self.current_trophies}")
-        print("Current wins:", self.current_wins)
-        self.match_history.loc[len(self.match_history)] = [datetime.now().isoformat(), current_brawler, game_result, old, trophy_delta, self.win_streak, hash_playstyle(playstyle_info), playstyle_info["name"], "|".join(playstyle_info["gamemodes"]), "|".join(playstyle_info["brawlers"]), PYLA_VERSION, (power_level if power_level is not None else -1)]
+        print(f"Trophies: {old_trophies} -> {self.current_trophies}")
+        print(f"Win Streak: {old_win_streak} -> {self.win_streak}")
+
+        self.match_history.loc[len(self.match_history)] = [datetime.now().isoformat(), current_brawler, parsed_result.result.value, old_trophies, trophy_delta, self.win_streak, hash_playstyle(playstyle_info), playstyle_info["name"], "|".join(playstyle_info["gamemodes"]), "|".join(playstyle_info["brawlers"]), PYLA_VERSION, (power_level if power_level is not None else -1)]
         self.match_counter += 1
         self.send_results_to_api()
-
-
         self.save_history()
 
-    def add_win(self, game_result):
-        if game_result == "victory":
+    def add_win(self, parsed_result: ParsedGameResult):
+        if parsed_result.result == MatchResult.VICTORY:
             self.current_wins += 1
+        print("Current wins:", self.current_wins)
 
     def change_trophies(self, new):
         print(f"Trophies changed from {self.current_trophies} to {new}")
