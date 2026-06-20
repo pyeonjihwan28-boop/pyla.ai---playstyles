@@ -80,10 +80,10 @@ debug: bool = False
 """True if super debug mode is enabled."""
 
 # Expected Output Variable
-movement: str = ""
+movement: tuple[float] = (0.0, 0.0)
 """
 SET THIS VARIABLE IN YOUR SCRIPT. 
-The double float representing keys to hold for movement (e.g., 'W', 'AS', '').
+The double float representing the position of the joystick to move to. -75 <= x <= 75.
 """
 
 JOYSTICK_RADIUS: int = 75
@@ -161,8 +161,8 @@ def find_closest_teammate(
     """
     return (0.0, 0.0), 0.0
 
-def is_there_poison_gas(player_data: tuple[float, float, float, float]) -> dict:
-    """Checks if there's poison gas in the given direction from the player"""
+def is_there_poison_gas(player_data: tuple[float, float, float, float], threshold: float, area_from_player_checked: int) -> dict:
+    """Checks for enough poison gas in the specified area around the player and returns a dict with directions."""
     return {"up": 0, "down": 0, "left": 0, "right": 0}
 
 def is_path_blocked(

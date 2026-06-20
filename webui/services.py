@@ -103,6 +103,7 @@ class WebDataService:
 
     DEBUG_FIELDS: dict[str, tuple[str, Any]] = {
         "verbose_debug": ("bool", False),
+        "state_finder_debug": ("bool", False),
         "re_apply_movement": ("bool", True),
         "debug_view": ("bool", False),
         "debug_view_fps": ("int", 30),

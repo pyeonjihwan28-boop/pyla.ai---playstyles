@@ -1,20 +1,23 @@
 import os
 import requests
-from utils import load_toml_as_dict, save_dict_as_toml, api_base_url, hash_playstyle, PYLA_VERSION
+from utils import load_toml_as_dict, save_dict_as_toml, api_base_url, hash_playstyle, PYLA_VERSION, resolve_project_path
 import pandas as pd
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
 from datetime import datetime
 
+
 class GameMode(Enum):
     CLASSIC = "classic"
     TRIO_SHOWDOWN = "trio_showdown"
+
 
 class MatchResult(Enum):
     VICTORY = "victory"
     DRAW = "draw"
     DEFEAT = "defeat"
+
 
 @dataclass
 class ParsedGameResult:
@@ -23,10 +26,12 @@ class ParsedGameResult:
     place: Optional[int] = None
     raw_string: str = ""
 
+
 class TrophyObserver:
 
     def __init__(self):
-        self.history_file = "./cfg/match_history.csv"
+        self.history_file = resolve_project_path("cfg", "match_history.csv")
+        
         self.current_trophies = None
         self.current_wins = None
         self.match_history = self.load_history()
@@ -37,21 +42,21 @@ class TrophyObserver:
                                    (1499, 8), (1799, 9), (3999, 10), (float("inf"), 15)]
         self.trophy_win_ranges = [(1999, 10), (2499, 8), (2799, 6), (2999, 4), (3099, 2), (float("inf"), 1)]
         self.showdown_trio_ranges = [
-            (49,    (11, 5, 5, 5)),
-            (99,    (11, 5, 4, -1)),
-            (199,   (11, 5, 3, -1)),
-            (299,   (11, 5, 2, -1)),
-            (499,   (11, 5, 2, -2)),
-            (599,   (11, 5, 1, -2)),
-            (799,   (11, 5, 1, -3)),
-            (999,   (11, 5, 1, -4)),
-            (1099,  (11, 5, 0, -6)),
-            (1199,  (11, 5, 0, -7)),
-            (1299,  (11, 5, 0, -8)),
-            (1499,  (11, 5, 0, -9)),
-            (1799,  (11, 5, -5, -10)),
-            (1999,  (11, 5, -5, -11)),
-            (2199,  (9,  4, -5, -11)),
+            (49, (11, 5, 5, 5)),
+            (99, (11, 5, 4, -1)),
+            (199, (11, 5, 3, -1)),
+            (299, (11, 5, 2, -1)),
+            (499, (11, 5, 2, -2)),
+            (599, (11, 5, 1, -2)),
+            (799, (11, 5, 1, -3)),
+            (999, (11, 5, 1, -4)),
+            (1099, (11, 5, 0, -6)),
+            (1199, (11, 5, 0, -7)),
+            (1299, (11, 5, 0, -8)),
+            (1499, (11, 5, 0, -9)),
+            (1799, (11, 5, -5, -10)),
+            (1999, (11, 5, -5, -11)),
+            (2199, (9, 4, -5, -11)),
             (float("inf"), (9, 4, -5, -11)),
         ]
         self.trophies_multiplier = int(load_toml_as_dict("./cfg/general_config.toml")["trophies_multiplier"])
@@ -68,7 +73,7 @@ class TrophyObserver:
     def calc_win_increment(self):
         for max_trophies, gain in self.trophy_win_ranges:
             if float(self.current_trophies) <= float(max_trophies):
-                return gain*self.trophies_multiplier + self.win_streak_gain()
+                return gain * self.trophies_multiplier + self.win_streak_gain()
         raise ValueError("Current trophies exceed all defined ranges")
 
     def calc_showdown_delta(self, place):
@@ -89,7 +94,7 @@ class TrophyObserver:
 
     def save_history(self):
         self.match_history.to_csv(self.history_file, index=False)
-    
+
     @staticmethod
     def parse_game_result(raw_result: str) -> ParsedGameResult:
         """Parses raw game result string into a structured data class."""
@@ -97,14 +102,14 @@ class TrophyObserver:
         if "showdown" in raw_result:
             place = int(raw_result.split("_")[-1])
             gamemode = GameMode.TRIO_SHOWDOWN if "trio_showdown" in raw_result else GameMode.CLASSIC
-            
+
             if place < 2:
                 result = MatchResult.VICTORY
             elif place == 2:
                 result = MatchResult.DRAW
             else:
                 result = MatchResult.DEFEAT
-                
+
             return ParsedGameResult(gamemode=gamemode, result=result, place=place, raw_string=raw_result)
         else:
             result_map = {
@@ -144,13 +149,25 @@ class TrophyObserver:
         else:
             print("Catastrophic failure")
             trophy_delta = 0
-        
-        self.current_trophies += trophy_delta
+        if self.current_trophies >= 1000 and self.current_trophies + trophy_delta < 1000:
+            self.current_trophies = 1000
+        elif self.current_trophies >= 2000 and self.current_trophies + trophy_delta < 2000:
+            self.current_trophies = 2000
+        else:
+            self.current_trophies += trophy_delta
 
         print(f"Trophies: {old_trophies} -> {self.current_trophies}")
         print(f"Win Streak: {old_win_streak} -> {self.win_streak}")
+        if self.current_wins:
+            print(f"Current Wins: {self.current_wins}")
 
-        self.match_history.loc[len(self.match_history)] = [datetime.now().isoformat(), current_brawler, parsed_result.result.value, old_trophies, trophy_delta, self.win_streak, hash_playstyle(playstyle_info), playstyle_info["name"], "|".join(playstyle_info["gamemodes"]), "|".join(playstyle_info["brawlers"]), PYLA_VERSION, (power_level if power_level is not None else -1)]
+        self.match_history.loc[len(self.match_history)] = [datetime.now().isoformat(), current_brawler,
+                                                           parsed_result.result.value, old_trophies, trophy_delta,
+                                                           self.win_streak, hash_playstyle(playstyle_info),
+                                                           playstyle_info["name"],
+                                                           "|".join(playstyle_info["gamemodes"]),
+                                                           "|".join(playstyle_info["brawlers"]), PYLA_VERSION,
+                                                           (power_level if power_level is not None else -1)]
         self.match_counter += 1
         self.send_results_to_api()
         self.save_history()

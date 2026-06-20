@@ -98,6 +98,7 @@ const state = {
     playstyleFilter: "all",
     pendingSaves: {},
     playerTagTimer: null,
+    playerTagLoading: false,
     runtimePollTimer: null,
     authSubmitting: false,
 };
@@ -117,6 +118,7 @@ const SETTINGS_META = {
     ],
     debug: [
         { key: "verbose_debug", label: "Verbose Debug", type: "checkbox", help: "Enable extra runtime debugging output." },
+        { key: "state_finder_debug", label: "State Finder Debug", type: "checkbox", help: "Enable state finder logging output." },
         { key: "re_apply_movement", label: "Re-apply Movement", type: "checkbox", help: "Keep sending joystick movement even when the target position has not changed." },
         { key: "debug_view", label: "Debug View", type: "checkbox", help: "Show the latest bot frame in a separate low-latency window." },
         { key: "debug_view_fps", label: "Debug View FPS", type: "number", help: "Maximum FPS for the debug window. Lower this if it costs too much performance." },
@@ -532,6 +534,14 @@ function getPlayerPillState() {
         };
     }
 
+    if (state.playerTagLoading) {
+        return {
+            className: "is-loading",
+            title: "Syncing player data...",
+            detail: "Checking player tag with the Brawl Stars API.",
+        };
+    }
+
     const cleanTag = cleanPlayerTag(state.playerInfo.player_tag || state.bootstrap.settings.general.player_tag || "");
     if (state.playerInfo.ok === false && cleanTag) {
         return {
@@ -577,6 +587,7 @@ function renderQueue() {
                         <h3 class="panel-title">Select a brawler and add it to the run order</h3>
                     </div>
                     <div class="player-pill ${playerPill.className}">
+                        ${playerPill.className === "is-loading" ? '<div class="player-pill-spinner"></div>' : ''}
                         <strong>${escapeHtml(playerPill.title)}</strong>
                         <span>${escapeHtml(playerPill.detail)}</span>
                     </div>
@@ -1503,6 +1514,7 @@ async function refreshRuntimeState() {
 
         if (result.runtime.is_running) {
             await refreshRunningQueue();
+            await refreshMatchHistory();
         }
 
         if (prevState !== result.runtime.state) {
@@ -1514,6 +1526,35 @@ async function refreshRuntimeState() {
             if (result.runtime.state === "error") {
                 showToast(result.runtime.last_error || "Pyla stopped with an error.", "error");
             }
+
+            if (prevState === "running" && !result.runtime.is_running) {
+                await refreshMatchHistory();
+            }
+        }
+    } catch {
+        return;
+    }
+}
+
+async function refreshMatchHistory() {
+    try {
+        const result = await fetchJSON("/api/history", {}, true);
+        if (!result || !result.items) return;
+
+        const prevItems = state.bootstrap.history?.items || [];
+        if (JSON.stringify(result.items) === JSON.stringify(prevItems)) return;
+
+        state.bootstrap.history = result;
+
+        if (state.currentView === "history") {
+            const summary = getHistorySummary();
+            const totalEl = document.querySelector("#view-history .history-total");
+            const metaEl = document.querySelector("#view-history .history-summary-meta");
+            if (totalEl) totalEl.textContent = `${summary.total_matches} total matches`;
+            if (metaEl) metaEl.textContent = `${summary.wins} wins | ${summary.losses} losses | ${formatPercent(summary.win_rate)} win rate | ${formatPercent(summary.loss_rate)} loss rate`;
+
+            const grid = document.querySelector("#view-history .hist-grid");
+            if (grid) grid.innerHTML = renderHistoryGrid();
         }
     } catch {
         return;
@@ -1547,12 +1588,18 @@ function bindQueueEvents() {
 
     document.getElementById("playerTagInput")?.addEventListener("input", (event) => {
         event.target.value = ensurePlayerTagPrefix(event.target.value);
-        debouncePlayerTagUpdate(event.target.value.trim());
+    });
+
+    document.getElementById("playerTagInput")?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            event.target.blur();
+        }
     });
 
     document.getElementById("playerTagInput")?.addEventListener("blur", async (event) => {
         event.target.value = formatPlayerTagInput(event.target.value);
-        await flushPlayerTagUpdate(event.target.value.trim());
+        await commitPlayerTagUpdate(event.target.value.trim());
     });
 
     document.getElementById("loadQueueBtn")?.addEventListener("click", () => {
@@ -1826,29 +1873,51 @@ function setSliderVisual(slider) {
     slider.style.background = `linear-gradient(90deg, rgba(255,42,68,1) 0%, rgba(255,112,137,1) ${percent}%, rgba(255,255,255,0.08) ${percent}%, rgba(255,255,255,0.08) 100%)`;
 }
 
-function debouncePlayerTagUpdate(tag) {
+async function commitPlayerTagUpdate(tag) {
     clearTimeout(state.playerTagTimer);
-    state.playerTagTimer = setTimeout(() => {
-        flushPlayerTagUpdate(tag).catch((error) => showToast(error.message || "Unable to sync player tag.", "error"));
-    }, 500);
-}
+    const cleanNew = cleanPlayerTag(tag);
+    const cleanSaved = cleanPlayerTag(state.bootstrap.settings.general.player_tag || "");
+    const tagChanged = cleanNew !== cleanSaved;
+    const previousLookupFailed = state.playerInfo.ok === false;
 
-async function flushPlayerTagUpdate(tag) {
-    clearTimeout(state.playerTagTimer);
-    if (cleanPlayerTag(state.bootstrap.settings.general.player_tag || "") === cleanPlayerTag(tag)) return;
+    if (!tagChanged && !previousLookupFailed) return;
+
     await updatePlayerTag(formatPlayerTagInput(tag));
 }
 
 async function updatePlayerTag(tag) {
-    const saved = await fetchJSON("/api/settings/general", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ player_tag: tag }),
-    });
+    setPlayerTagLoading(true);
+    try {
+        const saved = await fetchJSON("/api/settings/general", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ player_tag: tag }),
+        });
 
-    state.bootstrap.settings.general = { ...state.bootstrap.settings.general, ...saved };
-    await refreshPlayerInfo(tag, true);
-    renderSettings();
+        state.bootstrap.settings.general = { ...state.bootstrap.settings.general, ...saved };
+        await refreshPlayerInfo(tag, true);
+        renderSettings();
+    } finally {
+        setPlayerTagLoading(false);
+    }
+}
+
+function setPlayerTagLoading(isLoading) {
+    state.playerTagLoading = isLoading;
+
+    const pill = document.querySelector(".player-pill");
+    if (pill) {
+        const pillState = getPlayerPillState();
+        pill.className = `player-pill ${pillState.className}`;
+        const spinnerHtml = pillState.className === "is-loading" ? '<div class="player-pill-spinner"></div>' : '';
+        pill.innerHTML = `${spinnerHtml}<strong>${escapeHtml(pillState.title)}</strong><span>${escapeHtml(pillState.detail)}</span>`;
+    }
+
+    const tagInput = document.getElementById("playerTagInput");
+    if (tagInput) {
+        tagInput.disabled = isLoading;
+        tagInput.closest(".input-group")?.classList.toggle("is-loading-input", isLoading);
+    }
 }
 
 async function refreshPlayerInfo(tag, notify) {
@@ -2199,16 +2268,20 @@ function showToast(message, variant = "success") {
 }
 
 function iconMarkup(name) {
+    const S = `viewBox="0 0 24 24" aria-hidden="true"`;
     const icons = {
-        dashboard: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v6H4zM13 5h7v10h-7zM4 13h7v6H4zM13 17h7v2h-7z"/></svg>`,
-        queue: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h3v3H4zM9 6h11v3H9zM4 11h3v3H4zM9 11h11v3H9zM4 16h3v3H4zM9 16h11v3H9z"/></svg>`,
-        playstyles: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h6v6H5zM13 4h6v6h-6zM5 12h6v8H5zM13 12h6v8h-6z"/></svg>`,
-        history: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V5h2v12h12v2zM10 15H8V9h2zm4 0h-2V6h2zm4 0h-2v-4h2z"/></svg>`,
-        settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.43 7.43 0 0 0 .05-.94 7.43 7.43 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.63l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.17 7.17 0 0 0-1.63-.94l-.36-2.54A.49.49 0 0 0 13.9 2h-3.8a.49.49 0 0 0-.49.41l-.36 2.54a7.17 7.17 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.47a.5.5 0 0 0 .12.63l2.03 1.58a7.43 7.43 0 0 0-.05.94 7.43 7.43 0 0 0 .05.94l-2.03 1.58a.5.5 0 0 0-.12.63l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.05.72 1.63.94l.36 2.54a.49.49 0 0 0 .49.41h3.8a.49.49 0 0 0 .49-.41l.36-2.54c.58-.22 1.13-.55 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.63zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5"/></svg>`,
-        play: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>`,
-        pause: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>`,
-        stop: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg>`,
-        import: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l4 4h-3v7h-2V7H8zM5 15h14v6H5z"/></svg>`,
+        dashboard:  `<svg ${S}><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>`,
+        queue:      `<svg ${S}><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>`,
+        playstyles: `<svg ${S}><rect width="18" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/></svg>`,
+        history:    `<svg ${S}><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>`,
+        settings:   `<svg ${S}><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>`,
+        play:       `<svg ${S}><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>`,
+        pause:      `<svg ${S}><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></svg>`,
+        stop:       `<svg ${S}><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`,
+        import:     `<svg ${S}><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>`,
+        close:      `<svg ${S}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`,
+        logs:       `<svg ${S}><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></svg>`,
+        copy:       `<svg ${S}><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`,
     };
 
     return icons[name] || "";

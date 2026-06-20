@@ -17,7 +17,6 @@ from PIL import Image
 import cv2
 from packaging import version
 import traceback
-import winsound
 
 try:
     from early_access.early_access import get_brawler_stats, get_player_info
@@ -121,6 +120,10 @@ def load_toml_as_dict(file_path, cache=True):
         print(f"Error loading {full_path}: {e}")
         return {}
 
+def invalidate_toml_cache(file_path):
+    full_path = PROJECT_ROOT / str(file_path).lstrip('/\\')
+    del cached_toml[str(full_path)]
+
 
 def save_dict_as_toml(data, file_path):
     full_path = PROJECT_ROOT / str(file_path).lstrip('/\\')
@@ -181,7 +184,7 @@ def load_brawler_data():
 def load_all_brawlers_names():
     brawler_names_path = resolve_project_path("cfg", "names.json")
     if not brawler_names_path.exists():
-        return []
+        return {}
     try:
         with open(brawler_names_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -189,7 +192,7 @@ def load_all_brawlers_names():
     except Exception as e:
         traceback.print_exc()
         print(f"Error loading brawler names from {brawler_names_path}: {e}")
-        return []
+        return {}
 
 
 def api_update_brawler_data(brawler_data):
@@ -377,7 +380,7 @@ def save_brawler_icon(brawler_name):
     print(f"Icon not found for brawler '{brawler_name}'")
 
 
-PYLA_VERSION = "0.8.11"
+PYLA_VERSION = "0.8.13"
 
 
 def get_latest_version():
@@ -758,8 +761,3 @@ def clamp(x: int, low: int, high: int) -> int:
 
 JOYSTICK_RADIUS = 75
 
-def debug_beep():
-    threading.Thread(
-        target=lambda: winsound.Beep(1200, 500),
-        daemon=True
-    ).start()

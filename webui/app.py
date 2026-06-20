@@ -36,6 +36,14 @@ class _SuppressAssetsGetting(logging.Filter):
             and '304 -' in message
         )
 
+class _SupressHistoryPolling(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return not (
+            'GET /api/history ' in message
+            and ' 200 -' in message
+        )
+
 def _configure_request_logging():
     werkzeug_logger = logging.getLogger("werkzeug")
     if not any(isinstance(log_filter, _SuppressRuntimeStatusPolling) for log_filter in werkzeug_logger.filters):
@@ -44,6 +52,8 @@ def _configure_request_logging():
         werkzeug_logger.addFilter(_SuppressQueuePolling())
     if not any(isinstance(log_filter, _SuppressAssetsGetting) for log_filter in werkzeug_logger.filters):
         werkzeug_logger.addFilter(_SuppressAssetsGetting())
+    if not any(isinstance(log_filter, _SupressHistoryPolling) for log_filter in werkzeug_logger.filters):
+        werkzeug_logger.addFilter(_SupressHistoryPolling())
 
 
 def _start_discord_bot_thread(app: Flask):
