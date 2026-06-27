@@ -10,6 +10,7 @@ import queue
 import sys
 import threading
 import time
+import types
 import unittest
 
 # Allow running from repo root.
@@ -77,6 +78,28 @@ class TestBotControllerContract(unittest.TestCase):
         bc.stop()
         self.assertTrue(bc.stop_event.is_set())
         self.assertFalse(bc.pause_event.is_set(), "stop must wake a paused worker")
+
+    def test_worker_uses_bot_runner_without_importing_main(self):
+        calls = []
+        fake_runner = types.ModuleType("bot_runner")
+        fake_runner.pyla_main = lambda data, bot_controller=None: calls.append((data, bot_controller))
+        old_runner = sys.modules.get("bot_runner")
+        old_main = sys.modules.get("main")
+        sys.modules["bot_runner"] = fake_runner
+        sys.modules.pop("main", None)
+        try:
+            bc = BotController()
+            data = [{"brawler": "shelly"}]
+            bc._worker(data)
+            self.assertEqual(calls, [(data, bc)])
+            self.assertNotIn("main", sys.modules)
+        finally:
+            if old_runner is None:
+                sys.modules.pop("bot_runner", None)
+            else:
+                sys.modules["bot_runner"] = old_runner
+            if old_main is not None:
+                sys.modules["main"] = old_main
 
     def test_cross_thread_event_delivery_under_200ms(self):
         bc = BotController()

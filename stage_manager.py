@@ -100,15 +100,21 @@ class StageManager:
         }
         if type_of_push not in values:
             type_of_push = "trophies"
-        value = values[type_of_push]
-        if value == "" and type_of_push == "wins":
-            value = 0
-        push_until = brawler['push_until']
-        if push_until == "" and type_of_push == "wins":
-            push_until = 300
-        if push_until == "" and type_of_push == "trophies":
-            push_until = 1000
+        value = self._coerce_int(values[type_of_push], default=0)
+        push_until = self._coerce_int(
+            brawler['push_until'],
+            default=300 if type_of_push == "wins" else 1000,
+        )
         return type_of_push, value, push_until
+
+    @staticmethod
+    def _coerce_int(value, default=0):
+        if value == "":
+            return default
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
     def _exit_all_targets_completed(self, message):
         log.info(message)

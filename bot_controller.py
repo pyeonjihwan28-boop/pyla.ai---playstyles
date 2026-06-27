@@ -65,7 +65,7 @@ class BotController:
     def _worker(self, brawlers_data):
         # Imported lazily so the controller module itself stays importable
         # even when GUI code is loaded before the bot pipeline.
-        from main import pyla_main
+        from bot_runner import pyla_main
         try:
             pyla_main(brawlers_data, bot_controller=self)
         except SystemExit as e:
