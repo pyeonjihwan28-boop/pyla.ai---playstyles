@@ -62,7 +62,8 @@ class StageManager:
             'end_trio_showdown_0': self.end_game,
             'end_trio_showdown_1': self.end_game,
             'end_trio_showdown_2': self.end_game,
-            'end_trio_showdown_3': self.end_game
+            'end_trio_showdown_3': self.end_game,
+            'nano_noodles': self.click_nano_noodles,
         }
         self.matches_since_last_webhook_ping = 0
         self.ping_every_x_match = load_toml_as_dict("cfg/webhook_config.toml")['ping_every_x_match']
@@ -203,6 +204,24 @@ class StageManager:
         import threading
         self._star_drop_thread = threading.Thread(target=_handle_drop, daemon=True)
         self._star_drop_thread.start()
+
+    def click_nano_noodles(self):
+        if hasattr(self, '_nano_noodles_thread') and self._nano_noodles_thread.is_alive():
+            return
+
+        def _handle_nano_noodles():
+            noodle_x, noodle_y = press_coords_dict["middle_noodle"]
+            offset_x = 330 * self.window_controller.width_ratio
+            self.window_controller.click(noodle_x, noodle_y, noodle_y, already_include_ratio=False)
+            time.sleep(0.1)
+            self.window_controller.click(noodle_x + offset_x, noodle_y, already_include_ratio=False)
+            time.sleep(0.1)
+            self.window_controller.click(noodle_x - offset_x, noodle_y, already_include_ratio=False)
+
+
+        import threading
+        self._nano_noodles_thread = threading.Thread(target=_handle_nano_noodles, daemon=True)
+        self._nano_noodles_thread.start()
 
     def end_game(self):
         screenshot = self.window_controller.screenshot()
