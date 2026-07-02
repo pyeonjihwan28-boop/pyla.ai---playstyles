@@ -210,7 +210,7 @@ class StageManager:
             return
 
         def _handle_nano_noodles():
-            noodle_x, noodle_y = press_coords_dict["middle_noodle"]
+            noodle_x, noodle_y = 960, 740
             offset_x = 330 * self.window_controller.width_ratio
             self.window_controller.click(noodle_x, noodle_y, noodle_y, already_include_ratio=False)
             time.sleep(0.1)
