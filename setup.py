@@ -71,6 +71,7 @@ def check_base_requirements(req_list):
             print(f"  [OK] {req}")
         except ImportError:
             print(f"  [INSTALLING] {req}")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", req])
 
 def get_gpu_info():
     try:
