@@ -6,15 +6,6 @@ import shutil
 import glob
 import importlib
 
-# --- GIT CHECK ---
-if not any(arg in sys.argv for arg in ["--help", "-h", "--version", "clean"]):
-    if not shutil.which("git"):
-        print("\n" + "!" * 80)
-        print(" ERROR: 'git' command not found in your PATH.")
-        print(" Please install Git from https://git-scm.com/ and add it to your PATH.")
-        print("!" * 80 + "\n")
-        sys.exit(1)
-
 # --- LOOP-PROOF BOOTSTRAP ---
 
 def bootstrap():
@@ -51,8 +42,6 @@ def get_requirement_name(req):
 
     if " @ " in req:
         name = req.split(" @ ", 1)[0].strip()
-    elif "@git+" in req:
-        name = req.split("@git+", 1)[0].strip()
     else:
         name = req
         for sep in ["~=", ">=", "<=", "==", "!=", ">", "<"]:
