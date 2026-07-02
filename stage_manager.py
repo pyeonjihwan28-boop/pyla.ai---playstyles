@@ -62,8 +62,7 @@ class StageManager:
             'end_trio_showdown_0': self.end_game,
             'end_trio_showdown_1': self.end_game,
             'end_trio_showdown_2': self.end_game,
-            'end_trio_showdown_3': self.end_game,
-            'nano_noodles': self.click_nano_noodles,
+            'end_trio_showdown_3': self.end_game
         }
         self.matches_since_last_webhook_ping = 0
         self.ping_every_x_match = load_toml_as_dict("cfg/webhook_config.toml")['ping_every_x_match']
