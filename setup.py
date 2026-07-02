@@ -11,7 +11,6 @@ if not any(arg in sys.argv for arg in ["--help", "-h", "--version", "clean"]):
     if not shutil.which("git"):
         print("\n" + "!" * 80)
         print(" ERROR: 'git' command not found in your PATH.")
-        print(" PylaAI requires Git to install dependencies (e.g. scrcpy-client).")
         print(" Please install Git from https://git-scm.com/ and add it to your PATH.")
         print("!" * 80 + "\n")
         sys.exit(1)
@@ -64,15 +63,13 @@ def get_requirement_name(req):
 
 def check_base_requirements(req_list):
     print("\nVerifying base requirements...")
-    # Check scrcpy-client manually to avoid build-time dependency resolution conflicts
-    for req in req_list + ["scrcpy-client"]:
+    for req in req_list:
         pkg_name = get_requirement_name(req)
         mapping = {
             "opencv_python": "cv2",
             "discord.py": "discord",
             "pillow": "PIL",
             "pywin32": "win32api",
-            "scrcpy_client": "scrcpy",
             "onnxruntime_directml": "onnxruntime",
             "pycryptodome": "Crypto",
             "flask": "flask",
@@ -195,11 +192,6 @@ if any(cmd in sys.argv for cmd in ["install", "develop"]):
 
         # Conflict Resolution
         subprocess.check_call([sys.executable, "-m", "pip", "install", "adbutils==2.12.0", "av==12.3.0"])
-        subprocess.check_call([
-            sys.executable, "-m", "pip", "install",
-            "--force-reinstall", "--no-deps",
-            "git+https://github.com/leng-yue/py-scrcpy-client.git@v0.5.0"
-        ])
 
         os.system('cls' if os.name == 'nt' else 'clear')
         print("\n" + "="*50 + "\n              SETUP COMPLETED!                \n" + "="*50)
