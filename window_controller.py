@@ -11,16 +11,7 @@ from utils import config_bool, load_toml_as_dict, save_dict_as_toml, invalidate_
 
 brawl_stars_width, brawl_stars_height = 1920, 1080
 
-press_coords_dict = {
-    "hypercharge": (1400, 990),
-    "gadget": (1640, 990),
-    "attack": (1725, 800),
-    "proceed": (1660, 980),
-    "middle_got_it": (960, 980),
-    "super": (1510, 880),
-    "play_again": (1360, 920),
-    "continue_or_equip": (700, 1000),
-}
+press_coords_dict = load_toml_as_dict("cfg/buttons_config.toml")
 KNOWN_BS_PACKAGES = ("com.supercell.brawlstars", "bsd.suitcase.release")
 
 

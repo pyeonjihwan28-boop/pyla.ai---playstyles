@@ -20,11 +20,11 @@ for file in os.listdir(star_drops_path):
 
 end_results_path = r"./images/end_results/"
 
-match_result_crop_region = load_toml_as_dict("./cfg/lobby_config.toml")['lobby']['match_result']
 region_data = load_toml_as_dict("./cfg/lobby_config.toml")['template_matching']
+match_result_crop_region = region_data['match_result']
 
 
-def is_template_in_region(image, template_path, region, threshold=0.7):
+def is_template_in_region(image, template_path, region, threshold=0.75):
     current_height, current_width = image.shape[:2]
     orig_x, orig_y, orig_width, orig_height = region
     width_ratio, height_ratio = current_width / orig_screen_width, current_height / orig_screen_height
@@ -112,6 +112,8 @@ def get_in_game_state(image):
         if is_in_brawl_pass(image) or is_in_star_road(image): return "shop"
         if should_print_debug_info: print("Checking for prestige milestone...")
         if is_in_prestige_milestone(image): return "prestige_milestone"
+        if should_print_debug_info: print("Checking for nano noodles...")
+        if is_in_nano_noodles(image): return "nano_noodles"
         if should_print_debug_info: print("Checking for star drop...")
         star_drop_type = is_in_star_drop(image)
         if star_drop_type:
@@ -163,6 +165,9 @@ def is_in_match_making(image):
 
 def is_in_prestige_milestone(image):
     return is_template_in_region(image, states_path + "prestige_continue.png", region_data['prestige_continue'])
+
+def is_in_nano_noodles(image):
+    return is_template_in_region(image, states_path + "nano_noodles.png", region_data['nano_noodles'])
 
 
 def is_in_star_drop(image):

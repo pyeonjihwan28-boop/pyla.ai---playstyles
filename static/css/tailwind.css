@@ -126,7 +126,7 @@ body {
 
 .topbar {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 24px 30px; flex-shrink: 0;
+    padding: 16px 30px 4px; flex-shrink: 0;
 }
 .page-title { font-size: 2rem; font-weight: 900; letter-spacing: 0; }
 
@@ -139,7 +139,7 @@ body {
 .alerts-container { padding: 0 30px; display: flex; flex-direction: column; gap: 10px; }
 .alert { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 600; background: rgba(255, 170, 0, 0.1); border: 1px solid rgba(255, 170, 0, 0.3); color: #ffb84d; }
 
-.views-wrapper { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 18px 30px 30px; display: flex; flex-direction: column; }
+.views-wrapper { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 30px 30px; display: flex; flex-direction: column; }
 .view { display: none; flex-direction: column; height: auto; min-height: 0; flex: 0 0 auto; }
 .view.active { display: flex; animation: fade-in 0.3s ease forwards; }
 

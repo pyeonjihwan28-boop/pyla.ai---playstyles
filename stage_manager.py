@@ -62,7 +62,8 @@ class StageManager:
             'end_trio_showdown_0': self.end_game,
             'end_trio_showdown_1': self.end_game,
             'end_trio_showdown_2': self.end_game,
-            'end_trio_showdown_3': self.end_game
+            'end_trio_showdown_3': self.end_game,
+            'nano_noodles': self.click_nano_noodles,
         }
         self.matches_since_last_webhook_ping = 0
         self.ping_every_x_match = load_toml_as_dict("cfg/webhook_config.toml")['ping_every_x_match']
@@ -204,6 +205,27 @@ class StageManager:
         self._star_drop_thread = threading.Thread(target=_handle_drop, daemon=True)
         self._star_drop_thread.start()
 
+    def click_nano_noodles(self):
+        noodle_x, noodle_y = 960, 740
+        offset_x = 330 * self.window_controller.width_ratio
+        self.window_controller.click(
+            noodle_x,
+            noodle_y,
+            already_include_ratio=False
+        )
+        time.sleep(0.1)
+        self.window_controller.click(
+            noodle_x + offset_x,
+            noodle_y,
+            already_include_ratio=False
+        )
+        time.sleep(0.1)
+        self.window_controller.click(
+            noodle_x - offset_x,
+            noodle_y,
+            already_include_ratio=False
+        )
+
     def end_game(self):
         screenshot = self.window_controller.screenshot()
 
@@ -213,7 +235,7 @@ class StageManager:
         parsed_result = None
         while current_state.startswith("end") and time.time() - end_screen_time < 35:
 
-            if time.time() - self.time_since_last_stat_change > 25:
+            if time.time() - self.time_since_last_stat_change > 25 and parsed_result is None :
                 raw_found_result = '_'.join(current_state.split("_")[1:])
                 parsed_result = self.Trophy_observer.parse_game_result(raw_found_result)
 
@@ -257,10 +279,12 @@ class StageManager:
                 if self._sleep_interruptible(0.5):
                     break
 
-            print("Match did not start within 25s, proceeding to return to lobby.")
-            self.window_controller.press("proceed")
+            print("Match did not start within 25s, restarting the game.")
+            self.window_controller.restart_brawl_stars()
             time.sleep(2)
-
+        elif time.time() - end_screen_time > 35:
+            print("End screen timeout reached, restarting the game.")
+            self.window_controller.restart_brawl_stars()
         print("Game has ended", current_state)
 
     def quit_shop(self):

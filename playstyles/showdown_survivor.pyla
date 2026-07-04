@@ -1,4 +1,4 @@
-{"name": "Showdown Survivor", "description": "Follow teammates or try to get closer to the center when no enemies and avoids showdown gas", "brawlers": ["all"], "gamemodes": ["showdown"], "author": "Official", "date": "2026-06-10"}
+{"name": "Showdown Survivor", "description": "Follow teammates or try to get closer to the center when no enemies and avoids showdown gas", "brawlers": ["all"], "gamemodes": ["trio showdown"], "author": "Official", "date": "2026-07-04"}
 def no_enemy_movement():
     player_pos = get_entity_pos(player_data)
     closest_teammate_coords, dist = find_closest_teammate(teammate_data, player_pos, walls)
@@ -7,22 +7,43 @@ def no_enemy_movement():
         # Calculate vector to the center of the screen
         center_x = width / 2
         center_y = height / 2
+
         dx = center_x - player_pos[0]
         dy = center_y - player_pos[1]
-        dist_to_center = math.hypot(dx, dy) + 0.001
+        dist_to_center = math.hypot(dx, dy)
 
-        # Normalize and scale the movement to joystick bounds
-        direction_x = (dx / dist_to_center) * JOYSTICK_RADIUS
-        direction_y = (dy / dist_to_center) * JOYSTICK_RADIUS
+        # If close to center, randomly offset the TARGET coordinate instead
+        if dist_to_center < TILE_SIZE * 2:
+            center_x += random.randint(-TILE_SIZE, TILE_SIZE)
+            center_y += random.randint(-TILE_SIZE, TILE_SIZE)
+            dx = center_x - player_pos[0]
+            dy = center_y - player_pos[1]
+            dist_to_center = math.hypot(dx, dy)
+
+        if dist_to_center > 0:
+            direction_x = (dx / dist_to_center) * JOYSTICK_RADIUS
+            direction_y = (dy / dist_to_center) * JOYSTICK_RADIUS
+        else:
+            direction_x, direction_y = 0.0, 0.0
+
         movement_options = [(direction_x, direction_y), (direction_x, 0), (0, direction_y)]
 
         for move in movement_options:
             if not is_path_blocked(player_data, move, walls):
                 return move
         return movement_options[0]
+    if dist < TILE_SIZE:
+        alternative_moves = [
+            (0, -JOYSTICK_RADIUS), (-JOYSTICK_RADIUS, 0),
+            (0, JOYSTICK_RADIUS), (JOYSTICK_RADIUS, 0)
+        ]
+        return random.choice(alternative_moves)
 
-    direction_x = closest_teammate_coords[0] - player_pos[0]
-    direction_y = closest_teammate_coords[1] - player_pos[1]
+    dx = closest_teammate_coords[0] - player_pos[0]
+    dy = closest_teammate_coords[1] - player_pos[1]
+
+    direction_x = (dx / dist) * JOYSTICK_RADIUS
+    direction_y = (dy / dist) * JOYSTICK_RADIUS
     movement_options = [(direction_x, direction_y), (direction_x, 0), (0, direction_y)]
 
     for move in movement_options:

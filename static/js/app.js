@@ -297,6 +297,14 @@ function toggleAuthModal() {
     modal.classList.toggle("hidden", !shouldShow);
 
     if (shouldShow) {
+        const instructions = document.getElementById("authInstructions");
+        if (instructions) {
+            if (!auth.early_access) {
+                instructions.innerHTML = "<h1> This screen isn't supposed to appear as an api key is included. Check the logs.</h1>";
+            } else {
+                instructions.innerHTML = "Use <code>/generate_key</code> if you bought via Patreon, or <code>/refresh_key</code> if you bought a temporary key, with PylaBot in #commands, then paste the key here. Your key is handled by Python only and is not rendered back into the UI.";
+            }
+        }
         renderAuthMessage(auth, auth.code ? "error" : "info");
     } else {
         renderAuthMessage(null);

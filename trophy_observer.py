@@ -95,8 +95,7 @@ class TrophyObserver:
     def save_history(self):
         self.match_history.to_csv(self.history_file, index=False)
 
-    @staticmethod
-    def parse_game_result(raw_result: str) -> ParsedGameResult:
+    def parse_game_result(self, raw_result: str) -> ParsedGameResult:
         """Parses raw game result string into a structured data class."""
         print(f"Found game result: {raw_result}")
         if "showdown" in raw_result:
@@ -106,7 +105,18 @@ class TrophyObserver:
             if place < 2:
                 result = MatchResult.VICTORY
             elif place == 2:
-                result = MatchResult.DRAW
+                if self.current_trophies is not None:
+                    try:
+                        delta = self.calc_showdown_delta(place)
+                        if delta < 0:
+                            result = MatchResult.DEFEAT
+                        else:
+                            result = MatchResult.DRAW
+                    except Exception as e:
+                        print(f"Error calculating showdown delta for place {place}: {e}")
+                        result = MatchResult.DRAW
+                else:
+                    result = MatchResult.DRAW
             else:
                 result = MatchResult.DEFEAT
 
