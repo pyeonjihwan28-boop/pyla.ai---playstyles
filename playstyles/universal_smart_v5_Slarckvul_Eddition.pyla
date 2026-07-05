@@ -1,344 +1,106 @@
-{"name": "Slarckvul RUSH mode - Aggressive", "description": "Feita para Obliterar, Boa pra brawlers com muito dano e com time to kill rapido", "brawlers": ["all"], "gamemodes": ["all"], "author": "Slarck-Steam", "date": "2026-05-11"}
-
-# ═══════════════════════════════════════════════════════
-#  SETUP
-# ═══════════════════════════════════════════════════════
-
-_brawler_name = brawler or current_brawler
-brawler_info = brawlers_info.get(_brawler_name)
-
-if not brawler_info:
-    raise ValueError(f"Brawler '{_brawler_name}' not found in brawlers_info.")
-
-persistent_data.setdefault("time_since_holding_attack", None)
-persistent_data.setdefault("last_gadget_use", 0.0)
-
-must_hold = must_brawler_hold_attack(_brawler_name, brawlers_info)
-
-safe_range, attack_range, super_range = get_brawler_range(_brawler_name)
-player_pos = get_entity_pos(player_data)
-
-movement = (0, 0)
-
-
-# ═══════════════════════════════════════════════════════
-#  VECTOR / MOVEMENT HELPERS
-# ═══════════════════════════════════════════════════════
-
-def vec_len(x, y):
-    return math.sqrt(x * x + y * y)
-
-def normalize_move(x, y, radius=JOYSTICK_RADIUS):
-    length = vec_len(x, y)
-    if length <= 0:
-        return (0, 0)
-    scale = radius / length
-    return (x * scale, y * scale)
-
-def is_blocked(move):
-    return is_path_blocked(player_data, move, walls)
-
-def first_unblocked(moves, fallback=None):
-    for move in moves:
-        if not is_blocked(move):
-            return move
-    if fallback is not None:
-        return fallback
-    if moves:
-        return moves[0]
-    return (0, 0)
-
-def move_toward(target_pos):
-    dx = target_pos[0] - player_pos[0]
-    dy = target_pos[1] - player_pos[1]
-    full = normalize_move(dx, dy)
-    x_only = normalize_move(dx, 0)
-    y_only = normalize_move(0, dy)
-    return first_unblocked([full, x_only, y_only], full)
-
-def move_away_from(target_pos):
-    dx = player_pos[0] - target_pos[0]
-    dy = player_pos[1] - target_pos[1]
-    full = normalize_move(dx, dy)
-    x_only = normalize_move(dx, 0)
-    y_only = normalize_move(0, dy)
-    return first_unblocked([full, x_only, y_only], full)
-
-def strafe_around(target_pos):
-    dx = target_pos[0] - player_pos[0]
-    dy = target_pos[1] - player_pos[1]
-    side = 1 if int(time.time() / 2) % 2 == 0 else -1
-    sx = -dy * side
-    sy = dx * side
-    full = normalize_move(sx, sy)
-    reverse = normalize_move(-sx, -sy)
-    return first_unblocked([full, reverse], full)
-
-def random_safe_movement():
-    options = [
-        (0, -JOYSTICK_RADIUS),
-        (0, JOYSTICK_RADIUS),
-        (-JOYSTICK_RADIUS, 0),
-        (JOYSTICK_RADIUS, 0),
-        normalize_move(JOYSTICK_RADIUS, -JOYSTICK_RADIUS),
-        normalize_move(-JOYSTICK_RADIUS, -JOYSTICK_RADIUS),
-        normalize_move(JOYSTICK_RADIUS, JOYSTICK_RADIUS),
-        normalize_move(-JOYSTICK_RADIUS, JOYSTICK_RADIUS),
-    ]
-    random.shuffle(options)
-    return first_unblocked(options, get_random_movement())
-
-
-# ═══════════════════════════════════════════════════════
-#  ARCHETYPE DETECTION
-# ═══════════════════════════════════════════════════════
-
-def detect_archetype():
-    ar = float(brawler_info.get("attack_range", attack_range or 400))
-    sr = float(brawler_info.get("safe_range", safe_range or 200))
-    wall_ignore = brawler_info.get("ignore_walls_for_attacks", False)
-
-    if wall_ignore:
-        return "LOBS"
-    if ar <= 256:
-        return "ASSASSIN"
-    if sr == 0.0 and ar <= 350:
-        return "TANK"
-    if ar >= 600:
-        return "SNIPER"
-    return "RANGED"
-
-archetype = detect_archetype()
-
-
-# ═══════════════════════════════════════════════════════
-#  ATTACK HELPERS
-# ═══════════════════════════════════════════════════════
-
-def do_attack():
-    if not must_hold:
-        attack()
-        return
-
-    hold_attack_time = float(brawler_info.get("hold_attack", 0.0))
-
-    if persistent_data["time_since_holding_attack"] is None:
-        persistent_data["time_since_holding_attack"] = time.time()
-        attack(touch_up=False, touch_down=True)
-
-    elif time.time() - persistent_data["time_since_holding_attack"] >= hold_attack_time:
-        attack(touch_up=True, touch_down=False)
-        persistent_data["time_since_holding_attack"] = None
-
-def try_use_super(enemy_coords, enemy_distance):
-    if not is_super_ready:
-        return
-
-    if persistent_data["time_since_holding_attack"] is not None:
-        return
-
-    super_type = brawler_info.get("super_type", "damage")
-    enemy_hittable = is_enemy_hittable(player_pos, enemy_coords, walls, "super")
-
-    should_super = (
-        enemy_hittable and (
-            enemy_distance <= super_range
-            or super_type in ["spawnable", "other"]
-            or (
-                _brawler_name in ["stu", "surge"]
-                and super_type == "charge"
-                and enemy_distance <= super_range + attack_range
-            )
-        )
-    )
-
-    if should_super:
-        if is_hypercharge_ready:
-            use_hypercharge()
-        use_super()
-
-def try_attack(enemy_coords, enemy_distance, allow_wall_attack=False):
-    if enemy_distance > attack_range:
-        return False
-
-    enemy_hittable = is_enemy_hittable(player_pos, enemy_coords, walls, "attack")
-
-    if enemy_hittable or allow_wall_attack:
-        if is_gadget_ready and persistent_data["time_since_holding_attack"] is None:
-            if time.time() - persistent_data["last_gadget_use"] > 3.0:
-                use_gadget()
-                persistent_data["last_gadget_use"] = time.time()
-
-        do_attack()
-        return True
-
-    return False
-
-
-# ═══════════════════════════════════════════════════════
-#  HOLD ATTACK AUTO-RELEASE
-# ═══════════════════════════════════════════════════════
-
-if must_hold and persistent_data["time_since_holding_attack"] is not None:
-    hold_limit = float(brawler_info.get("hold_attack", 0.0)) + seconds_to_hold_attack_after_reaching_max
-    if time.time() - persistent_data["time_since_holding_attack"] >= hold_limit:
-        attack(touch_up=True, touch_down=False)
-        persistent_data["time_since_holding_attack"] = None
-
-
-# ═══════════════════════════════════════════════════════
-#  POISON GAS
-# ═══════════════════════════════════════════════════════
-
-def avoid_poison_gas():
-    poison_gas = is_there_poison_gas(player_data)
-    x = 0
-    y = 0
-
-    if poison_gas["up"] or poison_gas["down"]:
-        if poison_gas["up"] > poison_gas["down"]:
-            y = JOYSTICK_RADIUS
-        else:
-            y = -JOYSTICK_RADIUS
-
-    if poison_gas["left"] or poison_gas["right"]:
-        if poison_gas["left"] > poison_gas["right"]:
-            x = JOYSTICK_RADIUS
-        else:
-            x = -JOYSTICK_RADIUS
-
-    if x == 0 and y == 0:
-        return None
-
-    move = normalize_move(x, y)
-    return first_unblocked([move, (x, 0), (0, y)], move)
-
-
-# ═══════════════════════════════════════════════════════
-#  NO ENEMY / EXPLORATION
-# ═══════════════════════════════════════════════════════
-
-def no_enemy_movement():
-    closest_teammate_coords, teammate_distance = find_closest_teammate(
-        teammate_data, player_pos, walls
-    )
-
-    if closest_teammate_coords is not None:
-        if teammate_distance is None or teammate_distance > TILE_SIZE * 3:
-            return move_toward(closest_teammate_coords)
-
-    forward = (0, -JOYSTICK_RADIUS)
-    if not is_blocked(forward):
-        return forward
-
-    return random_safe_movement()
-
-
-# ═══════════════════════════════════════════════════════
-#  MAIN BEHAVIOR TREE 
-# ═══════════════════════════════════════════════════════
-
-enemy_coords = None
-enemy_distance = None
-
-# 1. Detectar ameaças e alvos
-if is_there_enemy(enemy_data):
-    enemy_coords, enemy_distance = find_closest_enemy(
-        enemy_data, player_pos, walls, "attack"
-    )
-
-anti_gas_movement = avoid_poison_gas()
-
-# 2. Reação de Fuga do Gás
-if anti_gas_movement is not None:
-    movement = anti_gas_movement
-    
-    # Continua atirando mesmo fugindo do gás se houver inimigos
-    if enemy_coords is not None:
-        try_use_super(enemy_coords, enemy_distance)
-        if archetype == "LOBS":
-            try_attack(enemy_coords, enemy_distance, allow_wall_attack=True)
-        else:
-            try_attack(enemy_coords, enemy_distance)
-
-# 3. Árvore de Combate Padrão
-else:
-    if enemy_coords is None:
-        movement = no_enemy_movement()
-    else:
-        try_use_super(enemy_coords, enemy_distance)
-        
-        # Ataca SEMPRE que estiver em alcance e com visão, independente do movimento
-        if archetype == "LOBS":
-            try_attack(enemy_coords, enemy_distance, allow_wall_attack=True)
-        else:
-            try_attack(enemy_coords, enemy_distance)
-
-        # ═══════════════════════════════════════════════
-        #  MOVIMENTAÇÃO POR ARQUÉTIPO (Sem travar ataque)
-        # ═══════════════════════════════════════════════
-        if archetype == "ASSASSIN":
-            if enemy_distance > attack_range * 0.40:
-                movement = move_toward(enemy_coords)
-            else:
-                movement = strafe_around(enemy_coords)
-
-        elif archetype == "TANK":
-            if enemy_distance > attack_range * 0.25:
-                movement = move_toward(enemy_coords)
-            else:
-                movement = strafe_around(enemy_coords)
-
-        elif archetype == "SNIPER":
-            min_safe = attack_range * 0.35
-            ideal_far = attack_range * 0.75
-
-            if enemy_distance < min_safe:
-                movement = move_away_from(enemy_coords)
-            elif enemy_distance <= ideal_far:
-                movement = strafe_around(enemy_coords)
-            else:
-                movement = move_toward(enemy_coords)
-
-        elif archetype == "LOBS":
-            ideal_dist = attack_range * 0.55
-
-            if enemy_distance < attack_range * 0.45:
-                movement = move_away_from(enemy_coords)
-            elif enemy_distance > ideal_dist:
-                movement = move_toward(enemy_coords)
-            else:
-                movement = strafe_around(enemy_coords)
-
-        else: # RANGED
-            min_safe = max(safe_range * 0.50, attack_range * 0.30)
-            ideal_far = attack_range * 0.60
-
-            if enemy_distance < min_safe:
-                movement = move_away_from(enemy_coords)
-            elif enemy_distance <= ideal_far:
-                movement = strafe_around(enemy_coords)
-            else:
-                movement = move_toward(enemy_coords)
-
-        # Tratamento contra paredes quando em combate
-        if is_blocked(movement):
-            if enemy_distance < safe_range:
-                movement = first_unblocked(
-                    [move_away_from(enemy_coords), strafe_around(enemy_coords), random_safe_movement()], movement
-                )
-            else:
-                movement = first_unblocked(
-                    [move_toward(enemy_coords), strafe_around(enemy_coords), random_safe_movement()], movement
-                )
-
-
-# ═══════════════════════════════════════════════════════
-#  FINAL SAFETY
-# ═══════════════════════════════════════════════════════
-
-if movement is None:
-    movement = (0, 0)
-
-if is_path_blocked(player_data, movement, walls):
-    movement = random_safe_movement()
+BRAWLERS = [
+    {'Entity_Name': 'Shelly', 'Entity_Health': 7800, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 600, 'Entity_Attack_range': 7.67, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': 27, 'Entity_Super_charge_per_hit': 10.05, 'Entity_Super_damage': 640, 'Entity_Super_range': 7.67, 'Entity_Super_projectiles_speed': 4130, 'Entity_Hypercharge_per_hit': 3, 'Entity_Gadget_cooldown': 16, 'Entity_Gadget_range': 2.67},
+    {'Entity_Name': 'Colt', 'Entity_Health': 6200, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 720, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.3, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 8.35, 'Entity_Super_damage': 640, 'Entity_Super_range': 11, 'Entity_Super_projectiles_speed': 4891, 'Entity_Hypercharge_per_hit': 2.9, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': 11},
+    {'Entity_Name': 'Bull', 'Entity_Health': 10000, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 880, 'Entity_Attack_range': 5.33, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': 40.5, 'Entity_Super_charge_per_hit': 11, 'Entity_Super_damage': 2000, 'Entity_Super_range': 11, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 3.3, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': 6},
+    {'Entity_Name': 'Brock', 'Entity_Health': 6000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2320, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.95, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 20, 'Entity_Super_damage': 2080, 'Entity_Super_range': 8.33, 'Entity_Super_projectiles_speed': 870, 'Entity_Hypercharge_per_hit': 9, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': 4},
+    {'Entity_Name': 'Rico', 'Entity_Health': 6000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 600, 'Entity_Attack_range': 9.67, 'Entity_Attack_reload_speed': 1.1, 'Entity_Attack_spread': 6.75, 'Entity_Super_charge_per_hit': 6.375, 'Entity_Super_damage': 720, 'Entity_Super_range': 13.33, 'Entity_Super_projectiles_speed': 4891, 'Entity_Hypercharge_per_hit': 2.225, 'Entity_Gadget_cooldown': 19, 'Entity_Gadget_range': 7.33},
+    {'Entity_Name': 'Spike', 'Entity_Health': 6000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1120, 'Entity_Attack_range': 7.67, 'Entity_Attack_reload_speed': 2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 12.975, 'Entity_Super_damage': 800, 'Entity_Super_range': 7.67, 'Entity_Super_projectiles_speed': 1739, 'Entity_Hypercharge_per_hit': 3.875, 'Entity_Gadget_cooldown': 14, 'Entity_Gadget_range': 7.67},
+    {'Entity_Name': 'Barley', 'Entity_Health': 5400, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 7.33, 'Entity_Attack_reload_speed': 2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 18, 'Entity_Super_damage': 1600, 'Entity_Super_range': 9.33, 'Entity_Super_projectiles_speed': 1700, 'Entity_Hypercharge_per_hit': 5.4, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': 3.33},
+    {'Entity_Name': 'Jessie', 'Entity_Health': 6600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2120, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.8, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 16.695, 'Entity_Super_damage': 7200, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 10.017, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Nita', 'Entity_Health': 8400, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1920, 'Entity_Attack_range': 6, 'Entity_Attack_reload_speed': 1.1, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 20.9, 'Entity_Super_damage': 8600, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 10.45, 'Entity_Gadget_cooldown': 13, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Dynamike', 'Entity_Health': 6000, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 7.33, 'Entity_Attack_reload_speed': 1.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 25, 'Entity_Super_damage': 4400, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': 1600, 'Entity_Hypercharge_per_hit': 7.5, 'Entity_Gadget_cooldown': 12, 'Entity_Gadget_range': 2.33},
+    {'Entity_Name': 'El Primo', 'Entity_Health': 13000, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 760, 'Entity_Attack_range': 3, 'Entity_Attack_reload_speed': 0.8, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 9.5, 'Entity_Super_damage': 1920, 'Entity_Super_range': 9, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 2.85, 'Entity_Gadget_cooldown': 14, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Mortis', 'Entity_Health': 8000, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 2000, 'Entity_Attack_range': 2.67, 'Entity_Attack_reload_speed': 2.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 21.25, 'Entity_Super_damage': 1800, 'Entity_Super_range': 10, 'Entity_Super_projectiles_speed': 3000, 'Entity_Hypercharge_per_hit': 6.375, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': 2.67},
+    {'Entity_Name': 'Crow', 'Entity_Health': 5600, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 840, 'Entity_Attack_range': 8.67, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': 20.25, 'Entity_Super_charge_per_hit': 7.875, 'Entity_Super_damage': 640, 'Entity_Super_range': 8.67, 'Entity_Super_projectiles_speed': 3261, 'Entity_Hypercharge_per_hit': 4.325, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Poco', 'Entity_Health': 8000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1520, 'Entity_Attack_range': 7, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': 65, 'Entity_Super_charge_per_hit': 25, 'Entity_Super_damage': 4200, 'Entity_Super_range': 9.33, 'Entity_Super_projectiles_speed': 5000, 'Entity_Hypercharge_per_hit': 10, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': 3.33},
+    {'Entity_Name': 'Bo', 'Entity_Health': 7600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1280, 'Entity_Attack_range': 8.67, 'Entity_Attack_reload_speed': 1.7, 'Entity_Attack_spread': 15, 'Entity_Super_charge_per_hit': 11.825, 'Entity_Super_damage': 2880, 'Entity_Super_range': 8.67, 'Entity_Super_projectiles_speed': 2391, 'Entity_Hypercharge_per_hit': 4.725, 'Entity_Gadget_cooldown': 19, 'Entity_Gadget_range': 7.33},
+    {'Entity_Name': 'Piper', 'Entity_Health': 5600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 720, 'Entity_Attack_range': 10, 'Entity_Attack_reload_speed': 2.3, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 8.225, 'Entity_Super_damage': 1800, 'Entity_Super_range': 8.67, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 2.875, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': 7},
+    {'Entity_Name': 'Pam', 'Entity_Health': 10000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 600, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.3, 'Entity_Attack_spread': 30, 'Entity_Super_charge_per_hit': 6.75, 'Entity_Super_damage': 6080, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 2, 'Entity_Gadget_cooldown': 12, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Tara', 'Entity_Health': 6600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 960, 'Entity_Attack_range': 8, 'Entity_Attack_reload_speed': 1.8, 'Entity_Attack_spread': 25, 'Entity_Super_charge_per_hit': 8.4, 'Entity_Super_damage': 1600, 'Entity_Super_range': 6.67, 'Entity_Super_projectiles_speed': 1522, 'Entity_Hypercharge_per_hit': 4.2, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Darryl', 'Entity_Health': 11000, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 480, 'Entity_Attack_range': 6, 'Entity_Attack_reload_speed': 1.8, 'Entity_Attack_spread': 40, 'Entity_Super_charge_per_hit': 5.1, 'Entity_Super_damage': 1320, 'Entity_Super_range': 7, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 1.525, 'Entity_Gadget_cooldown': 12, 'Entity_Gadget_range': 8.33},
+    {'Entity_Name': 'Penny', 'Entity_Health': 7000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1960, 'Entity_Attack_range': 8.67, 'Entity_Attack_reload_speed': 2, 'Entity_Attack_spread': 40, 'Entity_Super_charge_per_hit': 21.8, 'Entity_Super_damage': 6800, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 6.525, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Frank', 'Entity_Health': 13600, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 2320, 'Entity_Attack_range': 6, 'Entity_Attack_reload_speed': 0.8, 'Entity_Attack_spread': 58.5, 'Entity_Super_charge_per_hit': 34.8, 'Entity_Super_damage': 2480, 'Entity_Super_range': 7, 'Entity_Super_projectiles_speed': 6000, 'Entity_Hypercharge_per_hit': 10.425, 'Entity_Gadget_cooldown': 16, 'Entity_Gadget_range': 6},
+    {'Entity_Name': 'Gene', 'Entity_Health': 7600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2000, 'Entity_Attack_range': 5.67, 'Entity_Attack_reload_speed': 2, 'Entity_Attack_spread': 80, 'Entity_Super_charge_per_hit': 25, 'Entity_Super_damage': None, 'Entity_Super_range': 7.67, 'Entity_Super_projectiles_speed': 3200, 'Entity_Hypercharge_per_hit': 8.75, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': 2.67},
+    {'Entity_Name': 'Tick', 'Entity_Health': 4800, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1360, 'Entity_Attack_range': 8.67, 'Entity_Attack_reload_speed': 2.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 18.7, 'Entity_Super_damage': 3200, 'Entity_Super_range': 3.33, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 7.475, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Leon', 'Entity_Health': 6600, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 960, 'Entity_Attack_range': 9.67, 'Entity_Attack_reload_speed': 1.9, 'Entity_Attack_spread': 17.5, 'Entity_Super_charge_per_hit': 12.6, 'Entity_Super_damage': None, 'Entity_Super_range': None, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 3.775, 'Entity_Gadget_cooldown': 13, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Rosa', 'Entity_Health': 10800, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1000, 'Entity_Attack_range': 3.67, 'Entity_Attack_reload_speed': 1, 'Entity_Attack_spread': 65, 'Entity_Super_charge_per_hit': 8.5, 'Entity_Super_damage': None, 'Entity_Super_range': None, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 4.25, 'Entity_Gadget_cooldown': 13, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Carl', 'Entity_Health': 8400, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1640, 'Entity_Attack_range': 8.33, 'Entity_Attack_reload_speed': None, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 19.475, 'Entity_Super_damage': 1000, 'Entity_Super_range': 2.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 9.725, 'Entity_Gadget_cooldown': 17, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Bibi', 'Entity_Health': 10000, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 2800, 'Entity_Attack_range': 3.67, 'Entity_Attack_reload_speed': 0.8, 'Entity_Attack_spread': 135, 'Entity_Super_charge_per_hit': 31.5, 'Entity_Super_damage': 1800, 'Entity_Super_range': 40, 'Entity_Super_projectiles_speed': 3000, 'Entity_Hypercharge_per_hit': 12.6, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': None},
+    {'Entity_Name': '8-Bit', 'Entity_Health': 10400, 'Entity_Movement_speed': 580, 'Entity_Attack_damage': 680, 'Entity_Attack_range': 10, 'Entity_Attack_reload_speed': 1.35, 'Entity_Attack_spread': 8.1, 'Entity_Super_charge_per_hit': 8.4, 'Entity_Super_damage': 5600, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 2.925, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Sandy', 'Entity_Health': 8200, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1800, 'Entity_Attack_range': 6, 'Entity_Attack_reload_speed': 1.8, 'Entity_Attack_spread': 36, 'Entity_Super_charge_per_hit': 16.875, 'Entity_Super_damage': None, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': 2000, 'Entity_Hypercharge_per_hit': 6.75, 'Entity_Gadget_cooldown': 11, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Bea', 'Entity_Health': 5600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 10, 'Entity_Attack_reload_speed': 0.9, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 26, 'Entity_Super_damage': 200, 'Entity_Super_range': 9, 'Entity_Super_projectiles_speed': 2500, 'Entity_Hypercharge_per_hit': 10.4, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Emz', 'Entity_Health': 7800, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1120, 'Entity_Attack_range': 6.67, 'Entity_Attack_reload_speed': 2, 'Entity_Attack_spread': 36, 'Entity_Super_charge_per_hit': 10.075, 'Entity_Super_damage': 480, 'Entity_Super_range': 5.67, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 4.025, 'Entity_Gadget_cooldown': 19, 'Entity_Gadget_range': 5},
+    {'Entity_Name': 'Mr. P', 'Entity_Health': 7400, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1520, 'Entity_Attack_range': 7, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 12.525, 'Entity_Super_damage': 5000, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 3.75, 'Entity_Gadget_cooldown': 17, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Max', 'Entity_Health': 7000, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 640, 'Entity_Attack_range': 8.33, 'Entity_Attack_reload_speed': 1.3, 'Entity_Attack_spread': 13.5, 'Entity_Super_charge_per_hit': 7.35, 'Entity_Super_damage': None, 'Entity_Super_range': 4, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 3.3, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Jacky', 'Entity_Health': 10000, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 2480, 'Entity_Attack_range': 3.33, 'Entity_Attack_reload_speed': 1.8, 'Entity_Attack_spread': 360, 'Entity_Super_charge_per_hit': 25.4, 'Entity_Super_damage': None, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 10.15, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Gale', 'Entity_Health': 8000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 600, 'Entity_Attack_range': 8.33, 'Entity_Attack_reload_speed': 1.2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 6.75, 'Entity_Super_damage': 1600, 'Entity_Super_range': 10, 'Entity_Super_projectiles_speed': 5000, 'Entity_Hypercharge_per_hit': 1.6875, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Nani', 'Entity_Health': 5000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 8.67, 'Entity_Attack_reload_speed': 1.8, 'Entity_Attack_spread': 50, 'Entity_Super_charge_per_hit': 20, 'Entity_Super_damage': 3600, 'Entity_Super_range': 58.33, 'Entity_Super_projectiles_speed': 1000, 'Entity_Hypercharge_per_hit': 6, 'Entity_Gadget_cooldown': 13, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Sprout', 'Entity_Health': 6400, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2200, 'Entity_Attack_range': 5, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 24.2, 'Entity_Super_damage': None, 'Entity_Super_range': 7.67, 'Entity_Super_projectiles_speed': 1739, 'Entity_Hypercharge_per_hit': 9.675, 'Entity_Gadget_cooldown': 9, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Surge', 'Entity_Health': 6600, 'Entity_Movement_speed': 680, 'Entity_Attack_damage': 2360, 'Entity_Attack_range': 6.67, 'Entity_Attack_reload_speed': 2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 35.4, 'Entity_Super_damage': 2000, 'Entity_Super_range': 3.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 7.075, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Colette', 'Entity_Health': 7200, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1000, 'Entity_Attack_range': 8.67, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 22.5, 'Entity_Super_damage': 1000, 'Entity_Super_range': 11, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 6.075, 'Entity_Gadget_cooldown': 22, 'Entity_Gadget_range': 8.33},
+    {'Entity_Name': 'Amber', 'Entity_Health': 6800, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 420, 'Entity_Attack_range': 8.33, 'Entity_Attack_reload_speed': 0.22, 'Entity_Attack_spread': 15, 'Entity_Super_charge_per_hit': 4.3, 'Entity_Super_damage': 960, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': 1750, 'Entity_Hypercharge_per_hit': 1.275, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Lou', 'Entity_Health': 7000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 880, 'Entity_Attack_range': 9.33, 'Entity_Attack_reload_speed': 1.1, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 12.1, 'Entity_Super_damage': 80, 'Entity_Super_range': 7.67, 'Entity_Super_projectiles_speed': 1739, 'Entity_Hypercharge_per_hit': 3.625, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Byron', 'Entity_Health': 5200, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 760, 'Entity_Attack_range': 10, 'Entity_Attack_reload_speed': 1.45, 'Entity_Attack_spread': 30, 'Entity_Super_charge_per_hit': 11.3, 'Entity_Super_damage': 3000, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': 2000, 'Entity_Hypercharge_per_hit': 3.375, 'Entity_Gadget_cooldown': 17, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Edgar', 'Entity_Health': 7400, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 1080, 'Entity_Attack_range': 2, 'Entity_Attack_reload_speed': 0.7, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 8.775, 'Entity_Super_damage': None, 'Entity_Super_range': 6.67, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 3.5, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': 6.67},
+    {'Entity_Name': 'Ruffs', 'Entity_Health': 6000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1200, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 15.25, 'Entity_Super_damage': 2000, 'Entity_Super_range': 7.67, 'Entity_Super_projectiles_speed': 1700, 'Entity_Hypercharge_per_hit': 6.1, 'Entity_Gadget_cooldown': 16, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Stu', 'Entity_Health': 7000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1080, 'Entity_Attack_range': 7.67, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 108, 'Entity_Super_damage': 400, 'Entity_Super_range': 2.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 3.225, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Belle', 'Entity_Health': 5800, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2080, 'Entity_Attack_range': 10, 'Entity_Attack_reload_speed': 1.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 21.84, 'Entity_Super_damage': 1100, 'Entity_Super_range': 10.67, 'Entity_Super_projectiles_speed': 4000, 'Entity_Hypercharge_per_hit': 8.736, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Squeak', 'Entity_Health': 7600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2320, 'Entity_Attack_range': 7.67, 'Entity_Attack_reload_speed': 2.1, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 25.5, 'Entity_Super_damage': 2000, 'Entity_Super_range': 8.33, 'Entity_Super_projectiles_speed': 800, 'Entity_Hypercharge_per_hit': 10.2, 'Entity_Gadget_cooldown': 14, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Grom', 'Entity_Health': 6000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2080, 'Entity_Attack_range': 7.67, 'Entity_Attack_reload_speed': 2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 21.3, 'Entity_Super_damage': 3200, 'Entity_Super_range': 8.33, 'Entity_Super_projectiles_speed': 800, 'Entity_Hypercharge_per_hit': 8.5, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Buzz', 'Entity_Health': 10000, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 840, 'Entity_Attack_range': 2.67, 'Entity_Attack_reload_speed': 1, 'Entity_Attack_spread': 74.25, 'Entity_Super_charge_per_hit': 10.075, 'Entity_Super_damage': None, 'Entity_Super_range': 10, 'Entity_Super_projectiles_speed': 3800, 'Entity_Hypercharge_per_hit': 2.5, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Griff', 'Entity_Health': 7400, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 560, 'Entity_Attack_range': 8.33, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': 13.5, 'Entity_Super_charge_per_hit': 7, 'Entity_Super_damage': 720, 'Entity_Super_range': 9, 'Entity_Super_projectiles_speed': 3200, 'Entity_Hypercharge_per_hit': 2.1, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': 7.33},
+    {'Entity_Name': 'Ash', 'Entity_Health': 11800, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 4.67, 'Entity_Attack_reload_speed': 1.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 16.8, 'Entity_Super_damage': 600, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 8.4, 'Entity_Gadget_cooldown': 13, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Meg', 'Entity_Health': 4800, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 600, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.3, 'Entity_Attack_spread': 9, 'Entity_Super_charge_per_hit': 13.5, 'Entity_Super_damage': 7400, 'Entity_Super_range': 4.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 4.725, 'Entity_Gadget_cooldown': 17, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Lola', 'Entity_Health': 8000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 560, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.7, 'Entity_Attack_spread': 15, 'Entity_Super_charge_per_hit': 7, 'Entity_Super_damage': 4400, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 2.45, 'Entity_Gadget_cooldown': 11, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Fang', 'Entity_Health': 9600, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 2720, 'Entity_Attack_range': 2.67, 'Entity_Attack_reload_speed': 1, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 25.5, 'Entity_Super_damage': 3000, 'Entity_Super_range': 10, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 5.1, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': 5},
+    {'Entity_Name': 'Eve', 'Entity_Health': 6200, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 800, 'Entity_Attack_range': 9.33, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 12, 'Entity_Super_damage': 3800, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1200, 'Entity_Hypercharge_per_hit': 4.8, 'Entity_Gadget_cooldown': 17, 'Entity_Gadget_range': 4},
+    {'Entity_Name': 'Janet', 'Entity_Health': 6800, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2000, 'Entity_Attack_range': 4, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': 80, 'Entity_Super_charge_per_hit': 17.5, 'Entity_Super_damage': 1600, 'Entity_Super_range': 2.67, 'Entity_Super_projectiles_speed': 1500, 'Entity_Hypercharge_per_hit': 7, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Bonnie', 'Entity_Health': 10000, 'Entity_Movement_speed': 620, 'Entity_Attack_damage': 2240, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1, 'Entity_Attack_spread': 20, 'Entity_Super_charge_per_hit': 22.95, 'Entity_Super_damage': 2000, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 9.85, 'Entity_Gadget_cooldown': 16, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Otis', 'Entity_Health': 7200, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1000, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': 11, 'Entity_Super_charge_per_hit': 7.75, 'Entity_Super_damage': 680, 'Entity_Super_range': 9, 'Entity_Super_projectiles_speed': 3200, 'Entity_Hypercharge_per_hit': 3.875, 'Entity_Gadget_cooldown': 11, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Sam', 'Entity_Health': 11400, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 3, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': 50, 'Entity_Super_charge_per_hit': 20, 'Entity_Super_damage': 2800, 'Entity_Super_range': 8.67, 'Entity_Super_projectiles_speed': 2900, 'Entity_Hypercharge_per_hit': 5, 'Entity_Gadget_cooldown': 17, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Gus', 'Entity_Health': 6600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2160, 'Entity_Attack_range': 9.33, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 25.375, 'Entity_Super_damage': 5200, 'Entity_Super_range': 9.33, 'Entity_Super_projectiles_speed': 3600, 'Entity_Hypercharge_per_hit': 8.875, 'Entity_Gadget_cooldown': 16, 'Entity_Gadget_range': 14},
+    {'Entity_Name': 'Buster', 'Entity_Health': 10000, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 2760, 'Entity_Attack_range': 5.33, 'Entity_Attack_reload_speed': 1.8, 'Entity_Attack_spread': 45, 'Entity_Super_charge_per_hit': 34.5, 'Entity_Super_damage': 1600, 'Entity_Super_range': 3, 'Entity_Super_projectiles_speed': 4200, 'Entity_Hypercharge_per_hit': 13.8, 'Entity_Gadget_cooldown': 16, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Chester', 'Entity_Health': 7600, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1340, 'Entity_Attack_range': 8.33, 'Entity_Attack_reload_speed': 1.9, 'Entity_Attack_spread': 13.5, 'Entity_Super_charge_per_hit': 15.075, 'Entity_Super_damage': 3200, 'Entity_Super_range': 6.33, 'Entity_Super_projectiles_speed': 800, 'Entity_Hypercharge_per_hit': 4.2, 'Entity_Gadget_cooldown': 12, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Gray', 'Entity_Health': 6800, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2560, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 32, 'Entity_Super_damage': None, 'Entity_Super_range': 6.67, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 12.8, 'Entity_Gadget_cooldown': 23, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Mandy', 'Entity_Health': 6000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2800, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 29.05, 'Entity_Super_damage': 5000, 'Entity_Super_range': 40, 'Entity_Super_projectiles_speed': 5000, 'Entity_Hypercharge_per_hit': 10.15, 'Entity_Gadget_cooldown': 13, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'R-T', 'Entity_Health': 8200, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1400, 'Entity_Attack_range': 10, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': 360, 'Entity_Super_charge_per_hit': 25.375, 'Entity_Super_damage': 7800, 'Entity_Super_range': None, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 6.325, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Willow', 'Entity_Health': 6600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 800, 'Entity_Attack_range': 7.33, 'Entity_Attack_reload_speed': 2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 8.5, 'Entity_Super_damage': None, 'Entity_Super_range': 8.33, 'Entity_Super_projectiles_speed': 4130, 'Entity_Hypercharge_per_hit': 3.4, 'Entity_Gadget_cooldown': 13, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Maisie', 'Entity_Health': 8000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 3000, 'Entity_Attack_range': 8.67, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 26.25, 'Entity_Super_damage': 2480, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 10.5, 'Entity_Gadget_cooldown': 16, 'Entity_Gadget_range': 2.67},
+    {'Entity_Name': 'Hank', 'Entity_Health': 10400, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1045, 'Entity_Attack_range': 1.67, 'Entity_Attack_reload_speed': 0.25, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 6.55, 'Entity_Super_damage': 2640, 'Entity_Super_range': 20, 'Entity_Super_projectiles_speed': 4000, 'Entity_Hypercharge_per_hit': 2.6, 'Entity_Gadget_cooldown': 11, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Cordelius', 'Entity_Health': 7000, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 5.33, 'Entity_Attack_reload_speed': 1.2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 18, 'Entity_Super_damage': None, 'Entity_Super_range': 9, 'Entity_Super_projectiles_speed': 3800, 'Entity_Hypercharge_per_hit': 4.5, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': 3},
+    {'Entity_Name': 'Doug', 'Entity_Health': 10400, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 2400, 'Entity_Attack_range': 3.33, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': 360, 'Entity_Super_charge_per_hit': 21, 'Entity_Super_damage': None, 'Entity_Super_range': 9.33, 'Entity_Super_projectiles_speed': 4500, 'Entity_Hypercharge_per_hit': 10.5, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Pearl', 'Entity_Health': 8600, 'Entity_Movement_speed': 670, 'Entity_Attack_damage': 560, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': 18, 'Entity_Super_charge_per_hit': 6.5, 'Entity_Super_damage': 3100, 'Entity_Super_range': 3.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 2.6, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Chuck', 'Entity_Health': 9400, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1080, 'Entity_Attack_range': 6.67, 'Entity_Attack_reload_speed': 2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 13.5, 'Entity_Super_damage': 800, 'Entity_Super_range': 10, 'Entity_Super_projectiles_speed': 1500, 'Entity_Hypercharge_per_hit': 4.05, 'Entity_Gadget_cooldown': 10, 'Entity_Gadget_range': 6.67},
+    {'Entity_Name': 'Charlie', 'Entity_Health': 7400, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': None, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 16.8, 'Entity_Super_damage': 8400, 'Entity_Super_range': 9, 'Entity_Super_projectiles_speed': 3300, 'Entity_Hypercharge_per_hit': 10.075, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Mico', 'Entity_Health': 7000, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 2280, 'Entity_Attack_range': 4, 'Entity_Attack_reload_speed': 2.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 21.65, 'Entity_Super_damage': 2380, 'Entity_Super_range': None, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 10.825, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': 9},
+    {'Entity_Name': 'Kit', 'Entity_Health': 6200, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 2000, 'Entity_Attack_range': 3.67, 'Entity_Attack_reload_speed': 0.8, 'Entity_Attack_spread': 75, 'Entity_Super_charge_per_hit': 20, 'Entity_Super_damage': 2000, 'Entity_Super_range': 6.67, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 6, 'Entity_Gadget_cooldown': 23, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Larry & Lawrie', 'Entity_Health': 6000, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1400, 'Entity_Attack_range': 7.33, 'Entity_Attack_reload_speed': 2.2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 12.6, 'Entity_Super_damage': 6600, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 4.9, 'Entity_Gadget_cooldown': 12, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Melodie', 'Entity_Health': 7600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 920, 'Entity_Attack_range': 8, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': 360, 'Entity_Super_charge_per_hit': 20.7, 'Entity_Super_damage': None, 'Entity_Super_range': 5.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 5.175, 'Entity_Gadget_cooldown': 14, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Angelo', 'Entity_Health': 6200, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 400, 'Entity_Attack_range': 10, 'Entity_Attack_reload_speed': 0.1, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 3.5, 'Entity_Super_damage': 1000, 'Entity_Super_range': 2.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 1.225, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': 6},
+    {'Entity_Name': 'Draco', 'Entity_Health': 11200, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1400, 'Entity_Attack_range': 4, 'Entity_Attack_reload_speed': 1, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 17.5, 'Entity_Super_damage': 140, 'Entity_Super_range': 5.67, 'Entity_Super_projectiles_speed': 3500, 'Entity_Hypercharge_per_hit': 4.375, 'Entity_Gadget_cooldown': 11, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Lily', 'Entity_Health': 8400, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 2120, 'Entity_Attack_range': 2, 'Entity_Attack_reload_speed': 0.8, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 26.5, 'Entity_Super_damage': 1000, 'Entity_Super_range': 9, 'Entity_Super_projectiles_speed': 3800, 'Entity_Hypercharge_per_hit': 9.275, 'Entity_Gadget_cooldown': 22, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Berry', 'Entity_Health': 5200, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1320, 'Entity_Attack_range': 6.33, 'Entity_Attack_reload_speed': 2.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 12.375, 'Entity_Super_damage': 3040, 'Entity_Super_range': 8.33, 'Entity_Super_projectiles_speed': 2400, 'Entity_Hypercharge_per_hit': 4.95, 'Entity_Gadget_cooldown': 17, 'Entity_Gadget_range': 2.67},
+    {'Entity_Name': 'Clancy', 'Entity_Health': 7600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1400, 'Entity_Attack_range': 7.67, 'Entity_Attack_reload_speed': 2, 'Entity_Attack_spread': 30, 'Entity_Super_charge_per_hit': 11.2, 'Entity_Super_damage': 1200, 'Entity_Super_range': 5.67, 'Entity_Super_projectiles_speed': 3000, 'Entity_Hypercharge_per_hit': 3.35, 'Entity_Gadget_cooldown': 12, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Moe', 'Entity_Health': 7200, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1000, 'Entity_Attack_range': 7.67, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 10, 'Entity_Super_damage': 1200, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 3, 'Entity_Gadget_cooldown': 13, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Kenji', 'Entity_Health': 8000, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 1500, 'Entity_Attack_range': 2.67, 'Entity_Attack_reload_speed': 1, 'Entity_Attack_spread': 135, 'Entity_Super_charge_per_hit': 21.55, 'Entity_Super_damage': 2600, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': 1000, 'Entity_Hypercharge_per_hit': 5.375, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Shade', 'Entity_Health': 7400, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 3.67, 'Entity_Attack_reload_speed': 0.8, 'Entity_Attack_spread': 135, 'Entity_Super_charge_per_hit': 20, 'Entity_Super_damage': None, 'Entity_Super_range': 3.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 6.8, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Juju', 'Entity_Health': 6200, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 6.33, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 13, 'Entity_Super_damage': 8000, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 6.5, 'Entity_Gadget_cooldown': 14, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Meeple', 'Entity_Health': 6600, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 2520, 'Entity_Attack_range': 7.67, 'Entity_Attack_reload_speed': 1.7, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 22.05, 'Entity_Super_damage': None, 'Entity_Super_range': 5, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 8.82, 'Entity_Gadget_cooldown': 22, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Ollie', 'Entity_Health': 10800, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1800, 'Entity_Attack_range': 6.33, 'Entity_Attack_reload_speed': 1.8, 'Entity_Attack_spread': 13.5, 'Entity_Super_charge_per_hit': 16.875, 'Entity_Super_damage': 1600, 'Entity_Super_range': 5.67, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 4.2, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': 3.67},
+    {'Entity_Name': 'Lumi', 'Entity_Health': 7000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1200, 'Entity_Attack_range': 8, 'Entity_Attack_reload_speed': None, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 10.35, 'Entity_Super_damage': 2000, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': 29000, 'Entity_Hypercharge_per_hit': 4.125, 'Entity_Gadget_cooldown': 14, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Finx', 'Entity_Health': 7400, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1800, 'Entity_Attack_range': 8.33, 'Entity_Attack_reload_speed': 1.3, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 11.25, 'Entity_Super_damage': None, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': 2000, 'Entity_Hypercharge_per_hit': 3.375, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Jae-Yong', 'Entity_Health': 7400, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1500, 'Entity_Attack_range': 8.33, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 0.175, 'Entity_Super_damage': 1500, 'Entity_Super_range': 4.17, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 5.25, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Kaze', 'Entity_Health': 8200, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 1500, 'Entity_Attack_range': 2.67, 'Entity_Attack_reload_speed': 1, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': None, 'Entity_Super_damage': 1300, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': 1000, 'Entity_Hypercharge_per_hit': None, 'Entity_Gadget_cooldown': 6, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Alli', 'Entity_Health': 7800, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 2600, 'Entity_Attack_range': 2.67, 'Entity_Attack_reload_speed': 2.1, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 32.5, 'Entity_Super_damage': 1000, 'Entity_Super_range': None, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 8.125, 'Entity_Gadget_cooldown': 10, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Trunk', 'Entity_Health': 10400, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 2100, 'Entity_Attack_range': 3.33, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 24.5, 'Entity_Super_damage': 300, 'Entity_Super_range': 7, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 8.575, 'Entity_Gadget_cooldown': 7, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Mina', 'Entity_Health': 7200, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1600, 'Entity_Attack_range': 8, 'Entity_Attack_reload_speed': 1.4, 'Entity_Attack_spread': 65, 'Entity_Super_charge_per_hit': 14.4, 'Entity_Super_damage': 2000, 'Entity_Super_range': 7, 'Entity_Super_projectiles_speed': 2200, 'Entity_Hypercharge_per_hit': 4.3, 'Entity_Gadget_cooldown': 22, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Ziggy', 'Entity_Health': 6400, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1900, 'Entity_Attack_range': 7.33, 'Entity_Attack_reload_speed': 1.8, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 19, 'Entity_Super_damage': 1400, 'Entity_Super_range': 13.33, 'Entity_Super_projectiles_speed': 1000, 'Entity_Hypercharge_per_hit': 6.65, 'Entity_Gadget_cooldown': 17, 'Entity_Gadget_range': 7.33},
+    {'Entity_Name': 'Pierce', 'Entity_Health': 6000, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1900, 'Entity_Attack_range': 10, 'Entity_Attack_reload_speed': 3, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 15.425, 'Entity_Super_damage': 2800, 'Entity_Super_range': 8.33, 'Entity_Super_projectiles_speed': 4500, 'Entity_Hypercharge_per_hit': 6.15, 'Entity_Gadget_cooldown': 22, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Gigi', 'Entity_Health': 8200, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 1200, 'Entity_Attack_range': 2.33, 'Entity_Attack_reload_speed': 0.22, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 11.25, 'Entity_Super_damage': 2600, 'Entity_Super_range': 7.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 3.925, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Glowy', 'Entity_Health': 7800, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 560, 'Entity_Attack_range': 7.34, 'Entity_Attack_reload_speed': 1.7, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 3.5, 'Entity_Super_damage': 1500, 'Entity_Super_range': 5.67, 'Entity_Super_projectiles_speed': 5000, 'Entity_Hypercharge_per_hit': 1.225, 'Entity_Gadget_cooldown': 17, 'Entity_Gadget_range': 4.33},
+    {'Entity_Name': 'Sirius', 'Entity_Health': 6800, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 1200, 'Entity_Attack_range': 7.33, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 25.05, 'Entity_Super_damage': None, 'Entity_Super_range': 10, 'Entity_Super_projectiles_speed': 29000, 'Entity_Hypercharge_per_hit': 3.5, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': 9},
+    {'Entity_Name': 'Najia', 'Entity_Health': 6800, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 600, 'Entity_Attack_range': 6, 'Entity_Attack_reload_speed': 0.8, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 8.5, 'Entity_Super_damage': 2400, 'Entity_Super_range': 5.33, 'Entity_Super_projectiles_speed': 900, 'Entity_Hypercharge_per_hit': 3.4, 'Entity_Gadget_cooldown': 17, 'Entity_Gadget_range': None},
+    {'Entity_Name': 'Damian', 'Entity_Health': 11200, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 1400, 'Entity_Attack_range': 2.67, 'Entity_Attack_reload_speed': 1.2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 10.5, 'Entity_Super_damage': 1600, 'Entity_Super_range': 6, 'Entity_Super_projectiles_speed': 1196, 'Entity_Hypercharge_per_hit': 3.675, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': 7.33},
+    {'Entity_Name': 'Starr Nova', 'Entity_Health': 8000, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 1080, 'Entity_Attack_range': 5.67, 'Entity_Attack_reload_speed': 1.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 10.125, 'Entity_Super_damage': 600, 'Entity_Super_range': 4.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': None, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': 7.33},
+    {'Entity_Name': 'Bolt', 'Entity_Health': 10000, 'Entity_Movement_speed': 540, 'Entity_Attack_damage': 1044, 'Entity_Attack_range': None, 'Entity_Attack_reload_speed': 2.2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 6.525, 'Entity_Super_damage': 1400, 'Entity_Super_range': None, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 1.95, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None}
+]
