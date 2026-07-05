@@ -1,4 +1,6 @@
-Entity_Brawler_base_stats = [
+{"name": "" "brawlers": ["all"], "gamemodes": ["knockout"], "author": "Jihwan", "date": "2026-07-05"}
+
+Entity_Base_stats = [
     {'Entity_Name': 'Shelly', 'Entity_Health': 7800, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 600, 'Entity_Attack_range': 7.67, 'Entity_Attack_reload_speed': 1.5, 'Entity_Attack_spread': 27, 'Entity_Super_charge_per_hit': 10.05, 'Entity_Super_damage': 640, 'Entity_Super_range': 7.67, 'Entity_Super_projectiles_speed': 4130, 'Entity_Hypercharge_per_hit': 3, 'Entity_Gadget_cooldown': 16, 'Entity_Gadget_range': 2.67},
     {'Entity_Name': 'Colt', 'Entity_Health': 6200, 'Entity_Movement_speed': 720, 'Entity_Attack_damage': 720, 'Entity_Attack_range': 9, 'Entity_Attack_reload_speed': 1.3, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 8.35, 'Entity_Super_damage': 640, 'Entity_Super_range': 11, 'Entity_Super_projectiles_speed': 4891, 'Entity_Hypercharge_per_hit': 2.9, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': 11},
     {'Entity_Name': 'Bull', 'Entity_Health': 10000, 'Entity_Movement_speed': 770, 'Entity_Attack_damage': 880, 'Entity_Attack_range': 5.33, 'Entity_Attack_reload_speed': 1.6, 'Entity_Attack_spread': 40.5, 'Entity_Super_charge_per_hit': 11, 'Entity_Super_damage': 2000, 'Entity_Super_range': 11, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 3.3, 'Entity_Gadget_cooldown': 18, 'Entity_Gadget_range': 6},
@@ -104,3 +106,6 @@ Entity_Brawler_base_stats = [
     {'Entity_Name': 'Starr Nova', 'Entity_Health': 8000, 'Entity_Movement_speed': 820, 'Entity_Attack_damage': 1080, 'Entity_Attack_range': 5.67, 'Entity_Attack_reload_speed': 1.4, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 10.125, 'Entity_Super_damage': 600, 'Entity_Super_range': 4.33, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': None, 'Entity_Gadget_cooldown': 20, 'Entity_Gadget_range': 7.33},
     {'Entity_Name': 'Bolt', 'Entity_Health': 10000, 'Entity_Movement_speed': 540, 'Entity_Attack_damage': 1044, 'Entity_Attack_range': None, 'Entity_Attack_reload_speed': 2.2, 'Entity_Attack_spread': None, 'Entity_Super_charge_per_hit': 6.525, 'Entity_Super_damage': 1400, 'Entity_Super_range': None, 'Entity_Super_projectiles_speed': None, 'Entity_Hypercharge_per_hit': 1.95, 'Entity_Gadget_cooldown': 15, 'Entity_Gadget_range': None}
 ]
+
+Match_Entity_data = []
+
